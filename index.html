@@ -1,0 +1,687 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>کلینیک هوشمند — پیش‌غربالگری و ویزیت آنلاین</title>
+<style>
+  :root {
+    --bg:#f4f6f8; --card:#fff; --ink:#1c2430; --muted:#5d6b7c; --line:#dfe5ec;
+    --accent:#0f766e; --soft:#e6f4f2; --r:12px;
+    --red:#b42318; --red-bg:#fef3f2; --amber:#b54708; --amber-bg:#fffaeb;
+    --green:#067647; --green-bg:#ecfdf3; --blue:#175cd3; --blue-bg:#eff8ff; --gray-bg:#f2f4f7;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.8 Vazirmatn, Tahoma, "Segoe UI", system-ui, sans-serif; }
+  header { background:#12343b; color:#fff; padding:14px 16px; }
+  header h1 { margin:0; font-size:18px; }
+  header p { margin:2px 0 0; font-size:12.5px; opacity:.85; }
+  main { max-width:900px; margin:0 auto; padding:14px 12px 70px; }
+  .tabs { display:flex; gap:6px; margin:12px 0; }
+  .tab { flex:1; padding:10px; border:1px solid var(--line); background:var(--card); border-radius:10px;
+    cursor:pointer; font:inherit; color:var(--muted); }
+  .tab.on { background:#12343b; color:#fff; border-color:#12343b; font-weight:700; }
+  .hide { display:none !important; }
+  h2.h { font-size:17px; margin:14px 2px 10px; }
+  h3 { margin:0 0 6px; font-size:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:14px; margin-bottom:12px; }
+  .muted { color:var(--muted); font-size:13px; }
+  .small { font-size:12px; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .sp { flex:1; }
+  .no { color:var(--red); font-size:13px; }
+  .warn { color:var(--amber); font-size:13px; }
+
+  /* ---------- دکمه‌ها و فرم‌ها */
+  button.btn, .btn { font:inherit; padding:9px 16px; border-radius:9px; border:1px solid var(--accent);
+    background:var(--accent); color:#fff; cursor:pointer; font-weight:700; display:inline-block; }
+  .btn.ghost { background:#fff; color:var(--accent); }
+  .btn.danger { background:#fff; color:var(--red); border-color:var(--red); }
+  .btn.big { padding:12px 22px; font-size:16px; }
+  .btn:disabled { opacity:.5; cursor:wait; }
+  label { display:block; font-size:13px; color:var(--muted); margin-bottom:3px; }
+  input, select, textarea { width:100%; font:inherit; padding:8px 10px; border:1px solid var(--line);
+    border-radius:8px; background:#fff; color:var(--ink); }
+  input:focus, select:focus, textarea:focus { outline:2px solid var(--accent); outline-offset:0; border-color:var(--accent); }
+  textarea { resize:vertical; min-height:80px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; }
+  .full { grid-column:1/-1; }
+  .req { color:var(--red); }
+  .chip { display:inline-block; font-size:12px; padding:2px 10px; border-radius:99px; background:var(--gray-bg);
+    color:var(--muted); margin:2px 0 2px 4px; cursor:pointer; border:1px solid var(--line); }
+  .chip:hover { border-color:var(--accent); color:var(--accent); }
+  .tag { display:inline-block; font-size:11.5px; padding:1px 9px; border-radius:99px; background:var(--amber-bg);
+    color:var(--amber); border:1px solid #fec84b; margin-right:6px; font-weight:400; vertical-align:middle; }
+  .skill { display:inline-block; font-size:12.5px; padding:2px 11px; border-radius:99px; background:var(--soft);
+    color:var(--accent); margin:3px 0 3px 5px; border:1px solid color-mix(in srgb, var(--accent) 25%, #fff); }
+  .scale { display:flex; gap:4px; flex-wrap:wrap; }
+  .scale button { width:32px; height:32px; border-radius:8px; border:1px solid var(--line); background:#fff;
+    cursor:pointer; font:inherit; color:var(--ink); }
+  .scale button.on { background:var(--accent); color:#fff; border-color:var(--accent); font-weight:700; }
+
+  /* ---------- بنرها */
+  .banner { border-radius:var(--r); padding:14px; margin-bottom:12px; border:1px solid; }
+  .b-red { background:var(--red-bg); border-color:#fda29b; color:var(--red); }
+  .b-amber { background:var(--amber-bg); border-color:#fec84b; color:var(--amber); }
+  .b-green { background:var(--green-bg); border-color:#75e0a7; color:var(--green); }
+  .b-blue { background:var(--blue-bg); border-color:#84caff; color:var(--blue); }
+  .b-gray { background:var(--gray-bg); border-color:var(--line); color:var(--muted); }
+  .banner h3 { margin:0 0 4px; font-size:16px; }
+  .badge { font-size:12px; padding:2px 9px; border-radius:99px; border:1px solid; white-space:nowrap; }
+  .code { direction:ltr; text-align:center; font:700 34px/1.4 ui-monospace, Consolas, monospace; letter-spacing:5px;
+    background:#fff; border:2px dashed var(--green); border-radius:12px; padding:8px; margin:10px 0; color:var(--ink); }
+
+  /* ---------- لیست پزشکان */
+  .docgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
+  .dcard { background:var(--card); border:1px solid var(--line); border-top:5px solid var(--accent); border-radius:var(--r);
+    padding:16px 12px 14px; text-align:center; cursor:pointer; transition:transform .15s, box-shadow .15s; }
+  .dcard:hover, .dcard:focus { transform:translateY(-3px); box-shadow:0 8px 22px rgba(20,40,60,.12); outline:none; }
+  .dcard .av svg, .dcard .av img { border-radius:50%; border:3px solid var(--soft); }
+  .dcard .dn { font-weight:700; font-size:16px; margin-top:6px; }
+  .dcard .ds { color:var(--accent); font-weight:700; font-size:13.5px; }
+  .dcard .tg { font-size:12.5px; color:var(--muted); margin:6px 0 10px; min-height:40px; }
+  .stars { color:#f5a524; letter-spacing:1px; }
+  .dcard.st-sport { border-radius:6px; border-top-width:6px; }
+  .dcard.st-elegant { border-radius:20px; }
+  .dcard.st-gentle { border-radius:26px; border-top-width:0; border-bottom:5px solid var(--accent); }
+
+  /* ---------- هیرو و تم‌ها */
+  .hero { position:relative; color:#fff; border-radius:var(--r); overflow:hidden; margin-bottom:12px;
+    background:linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 65%, #000)); }
+  .hero-pat { position:absolute; inset:0; opacity:.16; }
+  .hero-in { position:relative; display:flex; align-items:center; gap:14px; padding:18px; flex-wrap:wrap; }
+  .hero .av svg, .hero .av img { border-radius:50%; border:3px solid rgba(255,255,255,.85); background:#fff; display:block; }
+  .hero h2 { margin:0; font-size:21px; }
+  .hero .stars { color:#ffd166; }
+  .hero-art { margin-inline-start:auto; }
+  .hero.st-sport { border-radius:6px; clip-path:polygon(0 0,100% 0,100% 82%,96% 100%,0 100%); padding-bottom:6px; }
+  .hero.st-elegant { border-radius:26px; }
+  .hero.st-gentle { border-radius:34px 34px 60px 60px; }
+  .st-sport .btn, .st-sport .scale button { border-radius:4px; }
+  .st-elegant .card, .st-gentle .card { border-radius:20px; }
+  .st-gentle .btn { border-radius:99px; }
+  .st-sport .card { border-radius:6px; border-right:4px solid var(--accent); }
+  .st-sport h3 { text-transform:none; letter-spacing:0; border-bottom:2px solid var(--accent); display:inline-block; }
+  .st-elegant h3 { color:var(--accent); }
+  .st-gentle h3 { color:var(--accent); }
+  .back { margin-bottom:10px; }
+  .stats { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+  .stat { flex:1; min-width:110px; background:var(--soft); border-radius:10px; padding:8px 10px; text-align:center; }
+  .stat b { display:block; font-size:18px; color:var(--accent); }
+  .rev { border-top:1px solid var(--line); padding:10px 0; }
+  .rev:first-of-type { border-top:0; }
+  .rev .who { font-weight:700; font-size:13.5px; }
+  .cta { position:sticky; bottom:10px; text-align:center; margin-top:10px; }
+  .cta .btn { box-shadow:0 6px 18px rgba(0,0,0,.2); }
+  .formcard { border-top:4px solid var(--accent); }
+
+  /* ---------- تصاویر */
+  .thumbs { display:flex; gap:8px; flex-wrap:wrap; margin:6px 0; }
+  .th { position:relative; width:92px; height:92px; border-radius:10px; overflow:hidden; border:1px solid var(--line); background:var(--gray-bg); }
+  .th img { width:100%; height:100%; object-fit:cover; cursor:zoom-in; }
+  .th button { position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%; border:0; background:rgba(0,0,0,.65); color:#fff; cursor:pointer; line-height:1; }
+  .uploadbox { border:2px dashed color-mix(in srgb, var(--accent) 45%, #fff); border-radius:var(--r); padding:12px; background:var(--soft); }
+  .lightbox { position:fixed; inset:0; background:rgba(0,0,0,.82); display:flex; align-items:center; justify-content:center; z-index:50; cursor:zoom-out; }
+  .lightbox img { max-width:94vw; max-height:92vh; border-radius:8px; }
+
+  /* ---------- داروها و برنامه */
+  .drug { border:1px solid var(--line); border-radius:10px; padding:10px; margin:8px 0; background:#fff; }
+  .drug b { font-size:15px; }
+  .drug .meta { color:var(--muted); font-size:13px; }
+  details summary { cursor:pointer; color:var(--muted); font-size:13px; margin-top:8px; }
+  pre { direction:ltr; text-align:left; background:#0f172a; color:#d1e7ff; padding:8px 10px; border-radius:8px;
+    overflow:auto; font-size:12px; line-height:1.5; margin:4px 0 10px; white-space:pre-wrap; word-break:break-word; }
+  .step { border-right:3px solid var(--accent); padding-right:8px; margin:8px 0; }
+  .qa { display:flex; gap:6px; flex-wrap:wrap; margin:6px 0; }
+  .qa span { background:var(--gray-bg); border-radius:8px; padding:2px 9px; font-size:12.5px; color:var(--ink); }
+  .qa span i { color:var(--muted); font-style:normal; }
+
+  /* ---------- گفتگو */
+  .chatbox { display:flex; flex-direction:column; gap:6px; max-height:300px; overflow-y:auto; padding:8px; background:var(--gray-bg); border-radius:10px; margin:8px 0; min-height:60px; }
+  .msg { max-width:82%; padding:6px 11px; border-radius:12px; font-size:14px; line-height:1.7; word-break:break-word; }
+  .msg .ts { display:block; font-size:10.5px; opacity:.7; margin-top:1px; }
+  .msg.me { align-self:flex-start; background:var(--accent); color:#fff; border-bottom-right-radius:4px; }
+  .msg.them { align-self:flex-end; background:#fff; border:1px solid var(--line); border-bottom-left-radius:4px; }
+  .msg.sys { align-self:center; background:var(--amber-bg); color:var(--amber); font-size:12.5px; max-width:96%; text-align:center; }
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid currentColor; border-top-color:transparent;
+    border-radius:50%; animation:r .8s linear infinite; vertical-align:-2px; margin-left:6px; }
+  @keyframes r { to { transform:rotate(360deg); } }
+  .disclaimer { font-size:12.5px; color:var(--muted); text-align:center; margin-top:14px; }
+  @media (max-width:640px) { .hero-art { display:none; } .hero h2 { font-size:18px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>کلینیک هوشمند — پیش‌غربالگری و ویزیت آنلاین</h1>
+  <p>نسخه آزمایشی دانشجویی. ایجنت جایگزین پزشک نیست و هیچ نسخه یا کدی بدون تأیید پزشک صادر نمی‌شود.</p>
+</header>
+
+<main>
+  <div class="tabs">
+    <button class="tab on" data-tab="patient">بیمار</button>
+    <button class="tab" data-tab="doctor">پزشک</button>
+    <button class="tab" data-tab="pharmacy">داروخانه</button>
+  </div>
+
+  <section id="tab-patient"><div id="patient-root"><div class="card muted">در حال بارگذاری…</div></div></section>
+
+  <section id="tab-doctor" class="hide">
+    <div class="card">
+      <div class="row">
+        <select id="doc-sel" style="max-width:260px"></select>
+        <input id="pin" type="password" inputmode="numeric" placeholder="رمز" style="max-width:120px">
+        <button class="btn" id="pin-go">ورود</button>
+        <span id="doc-err" class="no"></span>
+      </div>
+      <details id="pin-hint"><summary>رمزهای دمو</summary>
+        <div class="muted">سهرابی ۱۱۱۱ · مرادی ۲۲۲۲ · موسوی ۳۳۳۳ · کرامتی ۴۴۴۴</div></details>
+    </div>
+    <div id="doctor-list"></div>
+  </section>
+
+  <section id="tab-pharmacy" class="hide">
+    <div class="card">
+      <label>کد نسخه دارویی</label>
+      <div class="row">
+        <input id="ph-code" dir="ltr" style="max-width:200px; font-family:monospace; letter-spacing:2px" placeholder="XXXX-XXXX">
+        <button class="btn" id="ph-go">جستجو</button>
+      </div>
+      <div id="ph-err" class="no" style="margin-top:6px"></div>
+    </div>
+    <div id="ph-result"></div>
+  </section>
+
+  <p class="disclaimer">این پروژه یک نمونه آموزشی است. پزشکان، بیوگرافی‌ها، نظرات و داده‌های دارویی نمونه و فرضی‌اند.</p>
+</main>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fa = n => Number(n).toLocaleString('fa-IR', { maximumFractionDigits: 1 });
+async function api(path, opts = {}) {
+  const r = await fetch(path, opts);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'خطا در ارتباط با سرور');
+  return j;
+}
+const post = (path, body, headers = {}) => api(path, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) });
+const store = {
+  get(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+};
+const sess = {
+  get(k) { try { return sessionStorage.getItem(k) || ''; } catch (e) { return ''; } },
+  set(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} }
+};
+
+let DOCTORS = [], pollTimer = null, curCaseId = null, lastCase = null, pendingImgs = [];
+const docById = id => DOCTORS.find(d => d.id === id);
+const avg = d => d.reviews.reduce((s, r) => s + r.rating, 0) / d.reviews.length;
+const stars = r => '★'.repeat(Math.round(r)) + '☆'.repeat(5 - Math.round(r));
+const themeAttr = d => `style="--accent:${d.color};--soft:${d.soft}"`;
+const root = () => $('#patient-root');
+const OPEN = ['approved', 'accepted', 'dispensed'];
+
+/* ================= تصویرسازی: آواتار، هیرو، الگو ================= */
+function avatarSvg(d, size = 88) {
+  const a = d.avatar || {}, skin = a.skin || '#e8b896', hair = a.hair || '#2b2118', bg = a.bg || '#d9ece9', acc = d.color;
+  let h = `<rect width="100" height="100" fill="${bg}"/>`;
+  h += `<path d="M8 100 C8 80 26 72 50 72 C74 72 92 80 92 100 Z" fill="#fff" stroke="#cfd8e3" stroke-width="1"/>`;
+  h += `<path d="M41 72 L50 86 L59 72 Z" fill="${acc}"/>`;
+  let ey = 46;
+  if (a.style === 'scarf') {
+    ey = 48;
+    h += `<path d="M26 50 C22 22 38 12 50 12 C62 12 78 22 74 50 C74 62 70 70 64 78 L36 78 C30 70 26 62 26 50 Z" fill="${a.scarf || acc}"/>`;
+    h += `<ellipse cx="50" cy="48" rx="15" ry="18" fill="${skin}"/>`;
+  } else {
+    h += `<rect x="44" y="58" width="12" height="16" rx="5" fill="${skin}"/>`;
+    h += `<ellipse cx="50" cy="44" rx="17" ry="20" fill="${skin}"/>`;
+    h += `<path d="M32 42 C30 24 41 17 50 17 C60 17 70 24 68 42 C65 34 59 30 50 30 C41 30 35 34 32 42 Z" fill="${hair}"/>`;
+  }
+  if (a.beard) h += `<path d="M33 47 C33 68 67 68 67 47 C64 57 36 57 33 47 Z" fill="${hair}"/>`;
+  h += `<circle cx="44" cy="${ey}" r="1.7" fill="#2b2b2b"/><circle cx="56" cy="${ey}" r="1.7" fill="#2b2b2b"/>`;
+  h += `<path d="M40.5 ${ey - 5} Q44 ${ey - 7} 47.5 ${ey - 5} M52.5 ${ey - 5} Q56 ${ey - 7} 59.5 ${ey - 5}" stroke="#4a3a30" stroke-width="1.2" fill="none" stroke-linecap="round"/>`;
+  if (a.glasses) h += `<circle cx="44" cy="${ey}" r="5.5" fill="none" stroke="#334155" stroke-width="1.3"/><circle cx="56" cy="${ey}" r="5.5" fill="none" stroke="#334155" stroke-width="1.3"/><path d="M49.5 ${ey} h1" stroke="#334155" stroke-width="1.3"/>`;
+  h += `<path d="M44 ${ey + 8} Q50 ${ey + 13} 56 ${ey + 8}" stroke="${a.beard ? '#f3d5c4' : '#9a4d3b'}" stroke-width="1.7" fill="none" stroke-linecap="round"/>`;
+  if (d.kind === 'physio') h += `<rect x="60" y="79" width="11" height="8" rx="1.5" fill="${acc}"/><rect x="62" y="81" width="7" height="1.4" fill="#fff"/>`;
+  else h += `<path d="M36 72 C33 90 54 94 58 82" stroke="#475569" stroke-width="2" fill="none" stroke-linecap="round"/><circle cx="58" cy="82" r="3" fill="#94a3b8"/>`;
+  return `<svg viewBox="0 0 100 100" width="${size}" height="${size}" role="img" aria-label="${esc(d.name)}">${h}</svg>`;
+}
+const photoOrAvatar = (d, size) => d.photo
+  ? `<img src="/img/${esc(d.photo)}" width="${size}" height="${size}" style="object-fit:cover" alt="${esc(d.name)}">`
+  : avatarSvg(d, size);
+
+function heroSvg(kind) {
+  const open = `<svg viewBox="0 0 260 120" width="230" height="105" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity=".9" aria-hidden="true">`;
+  const soft = 'rgba(255,255,255,.22)';
+  if (kind === 'gp') return `${open}<path d="M70 8 C70 56 112 56 112 84"/><path d="M152 8 C152 56 112 56 112 84"/><circle cx="112" cy="96" r="13" fill="${soft}"/><path d="M200 36 h40 M220 16 v40" stroke-width="7"/><rect x="18" y="64" width="50" height="20" rx="10" transform="rotate(-28 43 74)" fill="${soft}"/></svg>`;
+  if (kind === 'physio') {
+    let v = '';
+    for (let i = 0; i < 7; i++) { const y = 6 + i * 15, x = 120 + Math.sin(i * 0.8) * 12, w = 26 + i * 2.5; v += `<rect x="${x - w / 2}" y="${y}" width="${w}" height="10" rx="5" fill="${soft}"/>`; }
+    return `${open}${v}<path d="M10 100 Q40 70 70 100 T130 100" opacity=".7"/><path d="M190 30 h50 M190 30 v-12 M240 30 v-12 M200 18 v24 M230 18 v24" stroke-width="4"/></svg>`;
+  }
+  if (kind === 'dentist') return `${open}<path d="M110 14 C90 4 70 18 72 42 C74 64 82 72 86 94 C88 106 96 106 100 92 C104 80 118 80 122 92 C126 106 134 106 136 94 C140 72 148 64 150 42 C152 18 132 4 110 14 Z" fill="${soft}"/><path d="M92 30 Q98 22 108 24" opacity=".8"/><path d="M200 24 l6 14 l14 6 l-14 6 l-6 14 l-6 -14 l-14 -6 l14 -6 z" fill="${soft}"/><path d="M30 80 l4 9 l9 4 l-9 4 l-4 9 l-4 -9 l-9 -4 l9 -4 z" fill="${soft}"/></svg>`;
+  return `${open}<path d="M110 100 C62 72 62 30 90 30 C102 30 110 38 110 46 C110 38 118 30 130 30 C158 30 158 72 110 100 Z" fill="${soft}"/><circle cx="196" cy="34" r="10"/><circle cx="222" cy="66" r="6"/><circle cx="36" cy="76" r="8"/><path d="M180 96 q14 -22 36 -14 q-6 22 -36 14 z" fill="${soft}"/></svg>`;
+}
+function pat(style) {
+  const t = { soft: '<path d="M20 12v16M12 20h16" stroke="#fff" stroke-width="3"/>',
+    elegant: '<circle cx="10" cy="10" r="3" fill="#fff"/><circle cx="30" cy="30" r="3" fill="#fff"/>',
+    sport: '<path d="M-5 45 L45 -5 M10 50 L50 10" stroke="#fff" stroke-width="4"/>',
+    gentle: '<circle cx="20" cy="20" r="9" fill="none" stroke="#fff" stroke-width="2.5"/>' }[style] || '';
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40'>${t}</svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+const decorate = () => document.querySelectorAll('.hero-pat').forEach(e => e.style.backgroundImage = pat(e.dataset.style));
+
+function heroHtml(d, compact = false) {
+  const r = avg(d);
+  return `<div class="hero st-${d.style}" ${themeAttr(d)}><div class="hero-pat" data-style="${d.style}"></div>
+    <div class="hero-in"><div class="av">${photoOrAvatar(d, compact ? 70 : 104)}</div>
+      <div class="hero-txt"><h2>${esc(d.name)}</h2>
+        <div>${esc(d.specialty)} · ${fa(d.experience)} سال سابقه</div>
+        <div class="stars">${stars(r)} <span>${fa(r)}</span> <span class="small">(${fa(d.reviews.length)} نظر نمونه)</span></div></div>
+      ${compact ? '' : `<div class="hero-art">${heroSvg(d.kind)}</div>`}</div></div>`;
+}
+
+/* ================= تب‌ها ================= */
+let currentTab = 'patient';
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
+  currentTab = b.dataset.tab;
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === b));
+  ['patient', 'doctor', 'pharmacy'].forEach(t => $('#tab-' + t).classList.toggle('hide', t !== currentTab));
+  if (currentTab === 'doctor') loadDoctor(true);
+});
+
+/* ================= بیمار: لیست پزشکان ================= */
+function stopPoll() { clearInterval(pollTimer); pollTimer = null; }
+
+function showHome() {
+  stopPoll(); curCaseId = null;
+  const last = store.get('caseId');
+  root().innerHTML = `${last ? `<div class="banner b-blue row"><span>پرونده‌ی اخیر شما ذخیره شده است.</span><span class="sp"></span><button class="btn ghost" id="resume">مشاهده پرونده</button><span id="resume-err" class="no"></span></div>` : ''}
+    <h2 class="h">پزشک خود را انتخاب کنید</h2>
+    <div class="docgrid">${DOCTORS.map(d => `<div class="dcard st-${d.style}" data-doc="${d.id}" ${themeAttr(d)} tabindex="0">
+      <div class="av">${photoOrAvatar(d, 92)}</div>
+      <div class="dn">${esc(d.name)}</div><div class="ds">${esc(d.specialty)}</div>
+      <div class="stars">${stars(avg(d))} <span class="small muted">${fa(avg(d))}</span></div>
+      <div class="small muted">${fa(d.experience)} سال سابقه · ${d.gender === 'female' ? 'پزشک خانم' : 'پزشک آقا'}</div>
+      <div class="tg">${esc(d.tagline)}</div>
+      <button class="btn" type="button">مشاهده پروفایل</button></div>`).join('')}</div>`;
+  root().querySelectorAll('.dcard').forEach(c => {
+    c.onclick = () => showProfile(c.dataset.doc);
+    c.onkeydown = e => { if (e.key === 'Enter') showProfile(c.dataset.doc); };
+  });
+  const rs = $('#resume');
+  if (rs) rs.onclick = async () => {
+    try { showResult(await api('/api/cases/' + last)); }
+    catch (e) { $('#resume-err').textContent = 'پرونده پیدا نشد'; store.set('caseId', ''); }
+  };
+}
+
+/* ================= بیمار: پروفایل پزشک ================= */
+function showProfile(id) {
+  const d = docById(id); stopPoll(); window.scrollTo(0, 0);
+  root().innerHTML = `<div class="themed st-${d.style}" ${themeAttr(d)}>
+    <button class="btn ghost back" id="back">← بازگشت به لیست پزشکان</button>
+    ${heroHtml(d)}
+    <div class="card"><h3>درباره‌ی ${esc(d.name)}</h3><p>${esc(d.bio)}</p>
+      <div>${d.expertise.map(x => `<span class="skill">${esc(x)}</span>`).join('')}</div>
+      <div class="stats"><div class="stat"><b>${fa(d.experience)}</b>سال سابقه</div>
+        <div class="stat"><b>${fa(avg(d))}</b>امتیاز بیماران</div>
+        <div class="stat"><b>${esc(d.specialty)}</b>تخصص</div></div></div>
+    <div class="card"><h3>نظرات بیماران <span class="tag">نمونه — فرضی برای دمو</span></h3>
+      ${d.reviews.map(r => `<div class="rev"><div class="row"><span class="who">${esc(r.name)}</span><span class="stars">${stars(r.rating)}</span><span class="sp"></span><span class="muted small">${esc(r.date)}</span></div><div>${esc(r.text)}</div></div>`).join('')}</div>
+    <div class="cta"><button class="btn big" id="visit">ورود به بخش ویزیت</button></div></div>`;
+  decorate();
+  $('#back').onclick = showHome;
+  $('#visit').onclick = () => showForm(id);
+}
+
+/* ================= بیمار: فرم اختصاصی ================= */
+const opt = o => typeof o === 'string' ? { v: o, l: o } : o;
+function fieldHtml(f) {
+  const id = 'f_' + f.id;
+  let input;
+  if (f.type === 'select') input = `<select id="${id}" data-fid="${f.id}"><option value="">—</option>${f.options.map(opt).map(o => `<option value="${esc(o.v)}">${esc(o.l)}</option>`).join('')}</select>`;
+  else if (f.type === 'textarea') input = `<textarea id="${id}" data-fid="${f.id}" placeholder="${esc(f.placeholder || '')}"></textarea>`;
+  else if (f.type === 'scale') input = `<div class="scale" id="${id}" data-fid="${f.id}">${[1,2,3,4,5,6,7,8,9,10].map(n => `<button type="button" data-v="${n}">${n}</button>`).join('')}</div>`;
+  else input = `<input id="${id}" data-fid="${f.id}" type="${f.type || 'text'}" ${f.min != null ? `min="${f.min}"` : ''} ${f.max != null ? `max="${f.max}"` : ''} ${f.step ? `step="${f.step}"` : ''} placeholder="${esc(f.placeholder || '')}">`;
+  return `<div class="${f.full || f.type === 'textarea' ? 'full' : ''}" data-wrap="${f.id}"><label>${esc(f.label)}${f.required ? ' <span class="req">*</span>' : ''}</label>${input}</div>`;
+}
+function uploadHtml(u) {
+  if (!u) return '';
+  return `<div class="full uploadbox"><label style="color:var(--ink);font-weight:700">📷 ${esc(u.label)}</label>
+    <div class="muted" style="margin-bottom:6px">${esc(u.hint)}</div>
+    <div class="thumbs" id="thumbs"></div>
+    <label class="btn ghost" style="margin:0">افزودن عکس<input type="file" id="file-in" accept="image/*" multiple hidden></label>
+    <span id="img-err" class="no"></span></div>`;
+}
+const valOf = fid => { const el = document.querySelector(`[data-fid="${fid}"]`); return !el ? '' : el.classList.contains('scale') ? (el.dataset.value || '') : el.value; };
+function applyShowIf(d) {
+  d.form.fields.forEach(f => {
+    if (!f.show_if) return;
+    const eq = Array.isArray(f.show_if.equals) ? f.show_if.equals : [f.show_if.equals];
+    const w = document.querySelector(`[data-wrap="${f.id}"]`);
+    if (w) w.classList.toggle('hide', !eq.includes(valOf(f.show_if.field)));
+  });
+}
+function getAnswers(d) {
+  const out = {};
+  d.form.fields.forEach(f => {
+    const w = document.querySelector(`[data-wrap="${f.id}"]`);
+    if (w && !w.classList.contains('hide')) out[f.id] = valOf(f.id);
+  });
+  return out;
+}
+function setScale(el, v) { el.dataset.value = v || ''; el.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === String(v))); }
+function setAnswers(d, ans) {
+  d.form.fields.forEach(f => {
+    const el = document.querySelector(`[data-fid="${f.id}"]`); if (!el) return;
+    const v = ans[f.id] ?? '';
+    if (f.type === 'scale') setScale(el, v); else el.value = v;
+  });
+  applyShowIf(d);
+}
+function shrink(file) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, 1280 / Math.max(img.width, img.height)), w = Math.round(img.width * s), h = Math.round(img.height * s);
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h); URL.revokeObjectURL(url);
+      res(c.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('این فایل به‌عنوان تصویر خوانده نشد')); };
+    img.src = url;
+  });
+}
+function renderThumbs() {
+  const t = $('#thumbs'); if (!t) return;
+  t.innerHTML = pendingImgs.map((s, i) => `<div class="th"><img src="${s}" alt="" data-i="${i}"><button type="button" data-rm="${i}" aria-label="حذف">×</button></div>`).join('');
+  t.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { pendingImgs.splice(+b.dataset.rm, 1); renderThumbs(); });
+  t.querySelectorAll('img').forEach(im => im.onclick = () => lightbox(im.src));
+}
+function lightbox(src) {
+  const l = document.createElement('div'); l.className = 'lightbox'; l.innerHTML = `<img src="${src}" alt="">`;
+  l.onclick = () => l.remove(); document.body.appendChild(l);
+}
+
+function showForm(id) {
+  const d = docById(id), f = d.form; stopPoll(); pendingImgs = []; window.scrollTo(0, 0);
+  root().innerHTML = `<div class="themed st-${d.style}" ${themeAttr(d)}>
+    <button class="btn ghost back" id="back">← بازگشت به پروفایل</button>
+    ${heroHtml(d, true)}
+    <div class="card formcard"><h3>${esc(f.title)}</h3><p class="muted">${esc(f.intro)}</p>
+      ${f.samples && f.samples.length ? `<div class="muted" style="margin-bottom:8px">نمونه‌های سریع برای دمو: ${f.samples.map((s, i) => `<span class="chip" data-s="${i}">${esc(s.label)}</span>`).join('')}</div>` : ''}
+      <form id="visit" class="grid">${f.fields.map(fieldHtml).join('')}${uploadHtml(f.upload)}
+        <div class="full row"><button class="btn big" id="go" type="submit">ارسال به دستیار هوشمند</button><span id="err" class="no"></span></div>
+      </form></div></div>`;
+  decorate();
+  $('#back').onclick = () => showProfile(id);
+  const form = $('#visit');
+  form.addEventListener('change', () => applyShowIf(d));
+  form.querySelectorAll('.scale').forEach(sc => sc.onclick = e => { const b = e.target.closest('button'); if (b) { setScale(sc, b.dataset.v); applyShowIf(d); } });
+  root().querySelectorAll('[data-s]').forEach(ch => ch.onclick = () => { setAnswers(d, f.samples[+ch.dataset.s].answers); window.scrollTo({ top: form.offsetTop, behavior: 'smooth' }); });
+  applyShowIf(d);
+  const fi = $('#file-in');
+  if (fi) fi.onchange = async () => {
+    $('#img-err').textContent = '';
+    for (const file of fi.files) {
+      if (pendingImgs.length >= f.upload.max) { $('#img-err').textContent = `حداکثر ${fa(f.upload.max)} عکس`; break; }
+      try { pendingImgs.push(await shrink(file)); } catch (e) { $('#img-err').textContent = e.message; }
+    }
+    fi.value = ''; renderThumbs();
+  };
+  form.onsubmit = async e => {
+    e.preventDefault(); $('#err').textContent = '';
+    const go = $('#go'); go.disabled = true; go.innerHTML = 'در حال بررسی<span class="spin"></span>';
+    try { showResult(await post('/api/intake', { doctor_id: id, answers: getAnswers(d), images: pendingImgs })); }
+    catch (ex) { $('#err').textContent = ex.message; go.disabled = false; go.textContent = 'ارسال به دستیار هوشمند'; }
+  };
+}
+
+/* ================= نمایش خروجی‌ها ================= */
+const TOOL_FA = {
+  check_red_flags: '۱. بررسی علائم خطر', suggest_doctor: '۲. بررسی تناسب پزشک انتخابی', check_risk_factors: '۳. بررسی عوامل خطر',
+  search_guidelines: '۴. جستجو در راهنمای درمانی', check_drug_safety: '۵. بررسی ایمنی دارو', create_draft_prescription: '۶. ساخت پیش‌نویس نسخه',
+  search_physio_plan: '۴. ساخت برنامه‌ی تمرینی', prepare_visit_summary: '۴. آماده‌سازی خلاصه‌ی پرونده',
+  refer_to_doctor: 'ارجاع به پزشک', llm_error: 'خطای مدل (برگشت به حالت دمو)'
+};
+function traceHtml(c) {
+  if (!c.trace || !c.trace.length) return '';
+  const steps = c.trace.map(t => `<div class="step"><b>${esc(TOOL_FA[t.tool] || t.tool)}</b> <span class="muted">${esc(t.ts)}</span>
+    <pre>${esc(JSON.stringify({ input: t.input, output: t.output }, null, 1))}</pre></div>`).join('');
+  return `<details><summary>مراحل تصمیم‌گیری ایجنت (حالت: ${esc(c.mode || '')})</summary>${steps}</details>`;
+}
+function drugsHtml(drugs, selectable = false, caseId = '') {
+  return drugs.map(d => `<div class="drug"><div class="row">${selectable ? `<input type="checkbox" style="width:auto" checked data-drug="${esc(d.id)}" data-case="${esc(caseId)}" data-keepc id="dr-${esc(caseId)}-${esc(d.id)}">` : ''}
+    <b>${esc(d.name_fa)}</b><span class="meta">${esc(d.form)}</span></div>
+    <div>${esc(d.dose)}</div><div class="meta">${esc(d.max)} · مدت: ${esc(d.duration)} · تعداد: ${esc(d.qty)}</div>
+    ${(d.warnings || []).map(w => `<div class="warn">⚠ ${esc(w)}</div>`).join('')}</div>`).join('');
+}
+function planHtml(p) {
+  return p.exercises.map(e => `<div class="drug"><b>${esc(e.name)}</b><div>${esc(e.how)}</div></div>`).join('') +
+    `<div class="muted" style="margin-top:6px">در این موارد حتماً حضوری مراجعه کنید:</div><ul>${p.return_if.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`;
+}
+function summaryHtml(s, withPoints = true) {
+  return `${s.priority === 'urgent' ? `<div class="banner b-amber" style="padding:8px 12px"><b>اولویت بالا:</b> ${esc((s.priority_reasons || []).join('، '))}</div>` : ''}
+    <div class="qa">${!withPoints ? '' : s.points.map(p => { const i = p.indexOf(':'); return `<span><i>${esc(p.slice(0, i))}:</i> ${esc(p.slice(i + 1))}</span>`; }).join('')}</div>`;
+}
+function draftBody(c, status) {
+  const dr = c.draft; if (!dr) return '';
+  if (dr.kind === 'plan') return `<div class="card"><b>${esc(dr.condition)}</b>${planHtml(dr)}${dr.advice.length ? `<b>توصیه‌ها</b><ul>${dr.advice.map(a => `<li>${esc(a)}</li>`).join('')}</ul>` : ''}</div>`;
+  if (dr.kind === 'summary') return `<div class="card"><b>خلاصه‌ی پرونده‌ی ارسال‌شده</b>${summaryHtml(dr)}<b>توصیه‌ها</b><ul>${dr.advice.map(a => `<li>${esc(a)}</li>`).join('')}</ul></div>`;
+  const list = OPEN.includes(status) && c.approved_drugs ? c.approved_drugs : dr.drugs;
+  return `<div class="card"><b>${OPEN.includes(status) ? 'داروهای تأییدشده' : 'پیش‌نویس (هنوز تأیید نشده)'}</b>${drugsHtml(list)}${dr.advice && dr.advice.length ? `<b>توصیه‌ها</b><ul>${dr.advice.map(a => `<li>${esc(a)}</li>`).join('')}</ul>` : ''}</div>`;
+}
+const msgsHtml = (chat, me) => (chat || []).map(m => `<div class="msg ${m.from === me ? 'me' : m.from === 'system' ? 'sys' : 'them'}">${esc(m.text)}<span class="ts">${esc(m.ts)}</span></div>`).join('');
+
+function topHtml(c) {
+  const dn = c.doctor ? c.doctor.name : 'پزشک';
+  let h = '';
+  if (c.status === 'emergency') h = `<div class="banner b-red"><h3>⚠ نیاز به بررسی فوری</h3>${esc(c.message)}</div>`;
+  else if (c.status === 'referred') h = `<div class="banner b-amber"><h3>لازم است پزشک شما را ببیند<span class="spin"></span></h3>${esc(c.message)}</div>`;
+  else if (c.status === 'pending_doctor') h = `<div class="banner b-blue"><h3>در انتظار تأیید ${esc(dn)}<span class="spin"></span></h3>${esc(c.message)}</div>`;
+  else if (OPEN.includes(c.status)) {
+    const visit = c.code_type === 'visit';
+    h = `<div class="banner b-green"><h3>✔ ${visit ? 'پرونده‌ی شما پذیرفته شد' : 'نسخه‌ی شما تأیید شد'}</h3>${esc(c.message)}
+      <div class="muted" style="color:inherit">${visit ? 'کد پذیرش ویزیت' : 'کد نسخه برای داروخانه'}:</div><div class="code">${esc(c.code)}</div>
+      ${c.status === 'dispensed' ? '<div>این نسخه در داروخانه تحویل داده شده است.</div>' : ''}</div>`;
+  } else if (c.status === 'rejected') h = `<div class="banner b-amber"><h3>پیش‌نویس تأیید نشد</h3>${esc(c.message)}</div>`;
+  if (c.routing && c.routing.suggested_doctor) {
+    const s = c.routing.suggested_doctor;
+    h += `<div class="banner b-blue"><b>پیشنهاد ایجنت:</b> ${esc(c.routing.reason)}<div class="row" style="margin-top:8px"><button class="btn ghost" data-goto="${esc(s.id)}">مشاهده‌ی ${esc(s.name)} (${esc(s.specialty)})</button></div></div>`;
+  }
+  if (c.image_count) h += `<div class="muted" style="margin-bottom:8px">📷 ${fa(c.image_count)} تصویر برای پزشک ارسال شد.</div>`;
+  return h + draftBody(c, c.status);
+}
+function chatCardHtml(c) {
+  return `<div class="card" id="chat-card"><h3>گفتگو با ${esc(c.doctor ? c.doctor.name : 'پزشک')}</h3>
+    <div class="chatbox" id="chat-msgs"></div>
+    <div class="row"><input id="chat-in" maxlength="500" placeholder="پیام خود را بنویسید…" style="flex:1"><button class="btn" id="chat-send">ارسال</button><span id="chat-err" class="no"></span></div>
+    <div class="muted" style="margin-top:6px">این گفتگو برای پیگیری غیراورژانسی است. در شرایط اورژانسی با ۱۱۵ تماس بگیرید.</div></div>`;
+}
+function renderTop(c) {
+  $('#res-top').innerHTML = topHtml(c);
+  $('#res-top').querySelectorAll('[data-goto]').forEach(b => b.onclick = () => showProfile(b.dataset.goto));
+}
+function renderChat(c) {
+  const holder = $('#res-chat');
+  if (!OPEN.includes(c.status)) { holder.innerHTML = ''; return; }
+  if (!$('#chat-card')) {
+    holder.innerHTML = chatCardHtml(c);
+    const send = async () => {
+      const inp = $('#chat-in'), text = inp.value.trim(); if (!text) return;
+      $('#chat-err').textContent = '';
+      try { await post(`/api/cases/${c.id}/chat`, { text }); inp.value = ''; pollOnce(); }
+      catch (e) { $('#chat-err').textContent = e.message; }
+    };
+    $('#chat-send').onclick = send; $('#chat-in').onkeydown = e => { if (e.key === 'Enter') send(); };
+  }
+  const box = $('#chat-msgs'), n = (c.chat || []).length;
+  if (box.dataset.n !== String(n)) { box.innerHTML = msgsHtml(c.chat, 'patient'); box.dataset.n = n; box.scrollTop = box.scrollHeight; }
+}
+function showResult(c) {
+  stopPoll(); window.scrollTo(0, 0);
+  lastCase = c; curCaseId = c.id; store.set('caseId', c.id);
+  const d = c.doctor || { color: '#0f766e', soft: '#e6f4f2', style: 'soft' };
+  root().innerHTML = `<div class="themed st-${d.style}" style="--accent:${d.color};--soft:${d.soft}">
+    <div id="res-top"></div><div id="res-chat"></div>
+    <div class="card">${traceHtml(c)}<div style="margin-top:10px"><button class="btn ghost" id="again">ثبت بیمار جدید</button></div></div></div>`;
+  $('#again').onclick = () => { store.set('caseId', ''); showHome(); };
+  renderTop(c); renderChat(c);
+  if (!['emergency', 'rejected'].includes(c.status)) pollTimer = setInterval(pollOnce, 3000);
+}
+async function pollOnce() {
+  if (!curCaseId || !$('#res-top')) return;
+  try {
+    const c = await api(`/api/cases/${curCaseId}?lite=1`);
+    c.trace = lastCase ? lastCase.trace : [];
+    const sig = s => JSON.stringify([s.status, s.code, s.message, s.approved_drugs]);
+    const changed = !lastCase || sig(c) !== sig(lastCase);
+    lastCase = c;
+    if (changed) renderTop(c);
+    renderChat(c);
+    if (['rejected', 'emergency'].includes(c.status)) stopPoll();
+  } catch (e) { /* دفعه‌ی بعد دوباره تلاش می‌شود */ }
+}
+
+/* ================= پزشک ================= */
+const STATUS = { emergency: ['اورژانسی', 'b-red'], referred: ['نیاز به ویزیت', 'b-amber'], pending_doctor: ['در انتظار تأیید', 'b-blue'],
+  approved: ['تأیید شد', 'b-green'], accepted: ['پذیرفته شد', 'b-green'], rejected: ['رد شد', 'b-gray'], dispensed: ['تحویل شد', 'b-gray'] };
+const badge = s => { const [t, cls] = STATUS[s] || [s, 'b-gray']; return `<span class="badge ${cls}">${t}</span>`; };
+const dHeaders = () => ({ 'X-Doctor-Id': sess.get('did'), 'X-Doctor-Pin': sess.get('pin') });
+let lastSig = '';
+const blobCache = {};
+
+$('#pin-go').onclick = () => { sess.set('did', $('#doc-sel').value); sess.set('pin', $('#pin').value); lastSig = ''; loadDoctor(true); };
+$('#pin').onkeydown = e => { if (e.key === 'Enter') $('#pin-go').click(); };
+
+async function loadDoctor(force) {
+  if (!sess.get('pin')) return;
+  try {
+    const { doctor, cases } = await api('/api/cases', { headers: dHeaders() });
+    $('#doc-err').textContent = '';
+    const sig = doctor.id + cases.map(c => c.id + c.status + (c.chat || []).length + c.chat_alert).join('|');
+    if (!force && sig === lastSig) return;
+    lastSig = sig; renderDoctor(doctor, cases);
+  } catch (e) { $('#doc-err').textContent = e.message; }
+}
+function thumbsHtml(c) {
+  if (!c.image_count) return '';
+  return `<div class="muted">📷 تصاویر ارسال‌شده توسط بیمار:</div><div class="thumbs">${Array.from({ length: c.image_count }, (_, i) => {
+    const k = `${c.id}/${i}`; return `<div class="th"><img data-img="${k}" src="${blobCache[k] || ''}" alt="تصویر بیمار"></div>`; }).join('')}</div>`;
+}
+async function loadThumbs() {
+  for (const im of document.querySelectorAll('#doctor-list img[data-img]')) {
+    const k = im.dataset.img;
+    if (!blobCache[k]) {
+      try {
+        const r = await fetch(`/api/cases/${k.split('/')[0]}/images/${k.split('/')[1]}`, { headers: dHeaders() });
+        if (!r.ok) continue; blobCache[k] = URL.createObjectURL(await r.blob());
+      } catch (e) { continue; }
+    }
+    im.src = blobCache[k]; im.onclick = () => lightbox(blobCache[k]);
+  }
+}
+function renderDoctor(doc, cases) {
+  const keep = {}, checks = {};
+  document.querySelectorAll('#doctor-list [data-keep]').forEach(e => keep[e.id] = e.value);
+  document.querySelectorAll('#doctor-list [data-keepc]').forEach(e => checks[e.id] = e.checked);
+  const act = document.activeElement && document.activeElement.id;
+  const head = `<div class="hero st-${doc.style}" ${themeAttr(doc)}><div class="hero-pat" data-style="${doc.style}"></div><div class="hero-in"><div class="av">${photoOrAvatar(doc, 60)}</div><div><h2 style="font-size:18px">${esc(doc.name)} — ${esc(doc.specialty)}</h2><div class="small">پرونده‌های شما (${fa(cases.length)})</div></div></div></div>`;
+  const list = cases.length ? cases.map(c => caseCard(doc, c)).join('') : '<div class="card muted">هنوز بیماری برای شما ثبت نشده است.</div>';
+  $('#doctor-list').innerHTML = `<div class="themed st-${doc.style}" ${themeAttr(doc)}>${head}${list}</div>`;
+  decorate();
+  Object.entries(keep).forEach(([id, v]) => { const e = document.getElementById(id); if (e) e.value = v; });
+  Object.entries(checks).forEach(([id, v]) => { const e = document.getElementById(id); if (e) e.checked = v; });
+  if (act) { const e = document.getElementById(act); if (e) e.focus(); }
+  document.querySelectorAll('#doctor-list .chatbox').forEach(b => b.scrollTop = b.scrollHeight);
+  document.querySelectorAll('#doctor-list [data-in]').forEach(i => i.onkeydown = e => { if (e.key === 'Enter') docSend(i.dataset.in); });
+  loadThumbs();
+}
+function caseCard(doc, c) {
+  const p = c.patient, dr = c.draft;
+  let body = '';
+  if (c.status === 'pending_doctor' && dr) {
+    const kind = dr.kind || 'rx';
+    if (kind === 'rx') body = `<b>پیش‌نویس پیشنهادی ایجنت (${esc(dr.condition)})</b>${drugsHtml(dr.drugs, true, c.id)}
+        ${(c.rejected_drugs || []).map(r => `<div class="no">✖ ${esc(r.drug_id)} توسط گارد ایمنی حذف شد: ${esc(r.reason)}</div>`).join('')}`;
+    else if (kind === 'plan') body = `<b>${esc(dr.condition)}</b>${planHtml(dr)}`;
+    else body = `<b>خلاصه‌ی پرونده</b>${summaryHtml(dr, false)}`;
+    body += `<div class="muted" style="margin:6px 0">استدلال ایجنت: ${esc(dr.rationale)}</div>
+      <label>توضیح پزشک برای بیمار (اختیاری)</label><textarea id="note-${c.id}" data-keep style="min-height:50px"></textarea>
+      <div class="row" style="margin-top:8px"><button class="btn" onclick="decide('${c.id}','approve')">${kind === 'rx' ? 'تأیید و صدور کد نسخه' : 'تأیید و صدور کد پذیرش'}</button>
+      <button class="btn danger" onclick="decide('${c.id}','reject')">رد پیش‌نویس</button><span class="no" id="e-${c.id}"></span></div>`;
+  } else if (c.status === 'referred') {
+    body = `<div class="warn">${esc(c.outcome ? c.outcome.reason : '')}</div>
+      ${c.routing && c.routing.suggested_doctor ? `<div class="muted">ایجنت به بیمار پیشنهاد داده: ${esc(c.routing.suggested_doctor.name)} (${esc(c.routing.suggested_doctor.specialty)})</div>` : ''}
+      <label style="margin-top:6px">توضیح پزشک (اختیاری)</label><textarea id="note-${c.id}" data-keep style="min-height:50px"></textarea>
+      <div class="row" style="margin-top:8px"><button class="btn" onclick="decide('${c.id}','accept')">پذیرش ویزیت و صدور کد پذیرش</button><span class="no" id="e-${c.id}"></span></div>`;
+  } else if (c.status === 'emergency') {
+    body = `<div class="no">⚠ ${esc(c.outcome ? c.outcome.reason : '')} — بیمار به کارکنان ارجاع شد.</div>`;
+  } else if (OPEN.includes(c.status)) {
+    body = `<div class="row"><span class="muted">${c.code_type === 'visit' ? 'کد پذیرش' : 'کد نسخه'}:</span><b dir="ltr" style="font-family:monospace;letter-spacing:2px">${esc(c.code)}</b></div>
+      ${c.code_type === 'prescription' && c.approved_drugs ? drugsHtml(c.approved_drugs) : ''}
+      ${c.chat_alert ? '<div class="banner b-red" style="padding:6px 12px;margin:6px 0">⚠ بیمار در گفتگو علائم هشداردهنده نوشته است.</div>' : ''}
+      <div class="chatbox" id="dchat-${c.id}">${msgsHtml(c.chat, 'doctor')}</div>
+      <div class="row"><input id="dchat-in-${c.id}" data-keep data-in="${c.id}" maxlength="500" placeholder="پاسخ به بیمار…" style="flex:1"><button class="btn" onclick="docSend('${c.id}')">ارسال</button><span class="no" id="ce-${c.id}"></span></div>`;
+  }
+  return `<div class="card"><div class="row"><b>${esc(p.name || 'بدون نام')}</b>
+      <span class="muted">${p.age} ساله${p.sex ? (p.sex === 'female' ? ' · زن' : ' · مرد') : ''}${p.pregnant ? ' · باردار' : ''}</span>
+      <span class="sp"></span>${badge(c.status)}<span class="muted">${esc(c.created)}</span></div>
+    <p style="margin:6px 0"><b>شرح حال:</b> ${esc(c.symptoms)}</p>
+    <div class="qa">${(c.answers_display || []).map(a => `<span><i>${esc(a.label)}:</i> ${esc(a.value)}</span>`).join('')}</div>
+    ${thumbsHtml(c)}
+    <div style="margin-top:8px">${body}</div>${traceHtml(c)}</div>`;
+}
+async function decide(id, action) {
+  const note = document.getElementById('note-' + id);
+  const drug_ids = [...document.querySelectorAll(`[data-case="${id}"]:checked`)].map(x => x.dataset.drug);
+  try { await post(`/api/cases/${id}/${action}`, { drug_ids, note: note ? note.value : '' }, dHeaders()); loadDoctor(true); }
+  catch (e) { const el = document.getElementById('e-' + id); if (el) el.textContent = e.message; }
+}
+async function docSend(id) {
+  const inp = document.getElementById('dchat-in-' + id), text = inp.value.trim(); if (!text) return;
+  try { await post(`/api/cases/${id}/chat`, { as: 'doctor', text }, dHeaders()); inp.value = ''; loadDoctor(true); }
+  catch (e) { document.getElementById('ce-' + id).textContent = e.message; }
+}
+setInterval(() => { if (currentTab === 'doctor') loadDoctor(false); }, 3000);
+
+/* ================= داروخانه ================= */
+$('#ph-go').onclick = async () => {
+  $('#ph-err').textContent = ''; $('#ph-result').innerHTML = '';
+  const code = $('#ph-code').value.trim(); if (!code) return;
+  try { renderPharmacy(await api('/api/pharmacy/' + encodeURIComponent(code))); }
+  catch (e) { $('#ph-err').textContent = e.message; }
+};
+$('#ph-code').onkeydown = e => { if (e.key === 'Enter') $('#ph-go').click(); };
+function renderPharmacy(r) {
+  const done = r.status === 'dispensed';
+  $('#ph-result').innerHTML = `<div class="card"><div class="row"><b>نسخه ${esc(r.code)}</b><span class="sp"></span>${badge(r.status)}</div>
+    <div class="muted">بیمار: ${esc(r.patient.name || 'بدون نام')} · ${r.patient.age} ساله · تأییدکننده: ${esc(r.doctor.name)} (${esc(r.doctor.specialty)}) · ${esc(r.approved_at)}</div>
+    ${drugsHtml(r.drugs)}${r.doctor_note ? `<p><b>توضیح پزشک:</b> ${esc(r.doctor_note)}</p>` : ''}
+    ${done ? `<div class="muted">تحویل شده در ${esc(r.dispensed_at)}</div>` : '<button class="btn" id="disp">ثبت تحویل داروها</button>'}
+    <span id="disp-err" class="no"></span></div>`;
+  if (!done) $('#disp').onclick = async () => {
+    try { await post('/api/pharmacy/' + encodeURIComponent(r.code) + '/dispense', {}); $('#ph-go').click(); }
+    catch (e) { $('#disp-err').textContent = e.message; }
+  };
+}
+
+/* ================= شروع ================= */
+(async function init() {
+  try {
+    const cfg = await api('/api/doctors');
+    DOCTORS = cfg.doctors;
+    if (!cfg.demo_pins) $('#pin-hint').classList.add('hide');  // روی سرور عمومی رمزها نمایش داده نمی‌شوند
+    $('#doc-sel').innerHTML = DOCTORS.map(d => `<option value="${d.id}">${esc(d.name)} — ${esc(d.specialty)}</option>`).join('');
+    $('#doc-sel').value = sess.get('did') || DOCTORS[0].id;
+    $('#pin').value = sess.get('pin');
+    showHome();
+  } catch (e) { root().innerHTML = `<div class="banner b-red">خطا در بارگذاری: ${esc(e.message)}</div>`; }
+})();
+</script>
+</body>
+</html>

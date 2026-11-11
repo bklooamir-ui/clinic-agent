@@ -1,0 +1,18 @@
+# Blueprint برای Render. رمز پزشکان داخل مخزن نیست و هنگام ساخت سرویس از شما پرسیده می‌شود.
+services:
+  - type: web
+    name: clinic-agent
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python server.py
+    healthCheckPath: /api/doctors
+    envVars:
+      - key: PIN_SOHRABI
+        sync: false
+      - key: PIN_MORADI
+        sync: false
+      - key: PIN_MOUSAVI
+        sync: false
+      - key: PIN_KARAMATI
+        sync: false
