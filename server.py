@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 
 import agent
 import calendar_fa
+import notify
 import tools
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -525,6 +526,7 @@ class Handler(BaseHTTPRequestHandler):
                     _book(case)
                 CASES[cid] = case
                 _save()
+            notify.notify_case(case, doc["name"])
             return self._json(200, public_case(case))
 
         # ---------- تصمیم پزشک
