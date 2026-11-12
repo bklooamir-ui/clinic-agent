@@ -228,6 +228,12 @@
       </div>
       <div class="muted" id="adm-sum" style="margin-top:6px"></div>
     </div>
+    <div class="card" id="links-card" style="display:none">
+      <h3>لینک مهمانِ موقت</h3>
+      <div class="muted">برای دادن دسترسی کوتاه به یک نفر. زمان از اولین بازکردن لینک شروع می‌شود و لینک فقط روی همان مرورگر کار می‌کند.</div>
+      <div class="row" style="margin-top:8px"><label style="margin:0">مدت (دقیقه)</label><input id="lk-min" type="number" min="1" max="60" value="5" style="max-width:80px"><button class="btn" id="lk-go">ساخت لینک</button><span id="lk-err" class="no"></span></div>
+      <div id="lk-new" style="margin-top:8px"></div><div id="lk-list" class="small" style="margin-top:8px"></div>
+    </div>
     <div id="admin-list"></div>
   </section>
 
@@ -238,9 +244,13 @@
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fa = n => Number(n).toLocaleString('fa-IR', { maximumFractionDigits: 1 });
+function showExpired() {
+  document.body.innerHTML = '<div style="max-width:420px;margin:18vh auto;background:#fff;border-radius:14px;padding:28px;text-align:center;box-shadow:0 2px 12px #0001"><h2 style="margin-top:0">دسترسی شما تمام شد</h2><p>زمان این لینک به پایان رسیده است. برای ورود دوباره، از صاحب سایت لینک تازه بگیرید.</p></div>';
+}
 async function api(path, opts = {}) {
   const r = await fetch(path, opts);
   const j = await r.json().catch(() => ({}));
+  if (r.status === 403 && j.code === 'access') { showExpired(); throw new Error(j.error); }
   if (!r.ok) throw new Error(j.error || 'خطا در ارتباط با سرور');
   return j;
 }
@@ -524,13 +534,13 @@ const msgsHtml = (chat, me) => (chat || []).map(m => `<div class="msg ${m.from =
 function apptHtml(c) {
   if (!c.appointment) return `<div class="appt">⚠ فعلاً وقت خالی‌ای در ۳ هفته‌ی آینده پیدا نشد؛ با مطب تماس بگیرید.</div>`;
   const a = c.appointment;
-  return `<div class="appt">🗓 وقت ویزیت حضوری: ${esc(a.text)} (به وقت ایران، حدود ${fa(a.minutes)} دقیقه)</div>
+  return `<div class="appt">🗓 ${a.followup ? 'وقت پیگیری با پزشک' : 'وقت ویزیت حضوری'}: ${esc(a.text)} (به وقت ایران، حدود ${fa(a.minutes)} دقیقه)</div>
     <button class="btn ghost" type="button" data-resched="${esc(c.id)}">این وقت مناسب نیست؛ وقت بعدی</button> <span class="no" id="resched-err"></span>`;
 }
 function topHtml(c) {
   const dn = c.doctor ? c.doctor.name : 'پزشک';
   let h = '';
-  if (c.status === 'emergency') h = `<div class="banner b-red"><h3>⚠ نیاز به بررسی فوری</h3>${esc(c.message)}</div>`;
+  if (c.status === 'emergency') h = `<div class="banner b-red"><h3>⚠ نیاز به بررسی فوری</h3>${esc(c.message)}<div style="margin-top:8px"><b>اول اقدام اورژانسی (۱۱۵ یا اورژانس)، بعد وقت پیگیری:</b></div>${apptHtml(c)}<div class="small">این وقت جایگزین مراجعه‌ی اورژانسی نیست.</div></div>`;
   else if (c.status === 'referred') h = `<div class="banner b-amber"><h3>لازم است پزشک شما را حضوری ببیند<span class="spin"></span></h3>${esc(c.message)}${apptHtml(c)}</div>`;
   else if (c.status === 'pending_doctor') h = `<div class="banner b-blue"><h3>در انتظار تأیید ${esc(dn)}<span class="spin"></span></h3>${esc(c.message)}</div>`;
   else if (OPEN.includes(c.status)) {
@@ -674,7 +684,7 @@ function caseCard(doc, c) {
       <label style="margin-top:6px">توضیح پزشک (اختیاری)</label><textarea id="note-${c.id}" data-keep style="min-height:50px"></textarea>
       <div class="row" style="margin-top:8px"><button class="btn" onclick="decide('${c.id}','accept')">پذیرش ویزیت و صدور کد پذیرش</button><span class="no" id="e-${c.id}"></span></div>`;
   } else if (c.status === 'emergency') {
-    body = `<div class="no">⚠ ${esc(c.outcome ? c.outcome.reason : '')} — بیمار به کارکنان ارجاع شد.</div>`;
+    body = `<div class="no">⚠ ${esc(c.outcome ? c.outcome.reason : '')} — به بیمار گفته شد همین الان ۱۱۵ یا اورژانس.</div>${c.appointment ? `<div class="muted">🗓 وقت پیگیری: <b>${esc(c.appointment.text)}</b></div>` : ''}`;
   } else if (OPEN.includes(c.status)) {
     body = `<div class="row"><span class="muted">${c.code_type === 'visit' ? 'کد پذیرش' : 'کد نسخه'}:</span><b dir="ltr" style="font-family:monospace;letter-spacing:2px">${esc(c.code)}</b></div>
       ${c.code_type === 'prescription' && c.approved_drugs ? drugsHtml(c.approved_drugs) : ''}
@@ -739,11 +749,32 @@ $('#adm-dl').onclick = async () => {
     a.download = 'clinic-cases.json'; a.click();
   } catch (e) { $('#adm-err').textContent = e.message; }
 };
+async function loadLinks() {
+  try {
+    const r = await api('/api/admin/links', { headers: aHeaders() });
+    const card = $('#links-card');
+    card.style.display = '';
+    if (!r.gate) { card.querySelector('.muted').textContent = 'این قابلیت خاموش است. برای فعال‌سازی، متغیر OWNER_KEY را در Render بگذارید (راهنما در DEPLOY.md).'; $('#lk-go').disabled = true; $('#lk-min').disabled = true; $('#lk-list').innerHTML = ''; return; }
+    const T = { unused: 'باز نشده', active: 'فعال', expired: 'منقضی' };
+    $('#lk-list').innerHTML = r.links.map(l => `<div>${T[l.state]}${l.state !== 'expired' ? ` — ${fa(Math.ceil(l.left / 60))} دقیقه باقی‌مانده` : ''} (${fa(l.minutes)} دقیقه‌ای)</div>`).join('');
+  } catch (e) { /* مدیر هنوز وارد نشده */ }
+}
+$('#lk-go').onclick = async () => {
+  $('#lk-err').textContent = '';
+  try {
+    const r = await post('/api/admin/links', { minutes: Number($('#lk-min').value) || 5 }, aHeaders());
+    const url = location.origin + r.path;
+    $('#lk-new').innerHTML = `<div class="muted">لینک ${fa(r.minutes)} دقیقه‌ای (فقط برای یک نفر؛ آن را همین حالا بفرستید):</div><input id="lk-url" readonly dir="ltr" value="${esc(url)}" style="width:100%" onclick="this.select()"><button class="btn ghost" id="lk-copy" style="margin-top:6px">کپی</button>`;
+    $('#lk-copy').onclick = async () => { try { await navigator.clipboard.writeText(url); $('#lk-copy').textContent = 'کپی شد'; } catch (e) { $('#lk-url').select(); } };
+    loadLinks();
+  } catch (e) { $('#lk-err').textContent = e.message; }
+};
 async function loadAdmin(force) {
   if (!sess.get('apin')) return;
   try {
     const r = await api('/api/admin/cases', { headers: aHeaders() });
     $('#adm-err').textContent = '';
+    loadLinks();
     const sig = r.cases.map(c => c.id + c.status + (c.chat || []).length + (c.appointment ? c.appointment.iso : '')).join('|') + '#' + (r.assistant || []).length;
     if (!force && sig === aSig) return;
     aSig = sig; renderAdmin(r);
@@ -837,6 +868,7 @@ setInterval(refreshDoctors, 60000);
 (async function init() {
   try {
     const cfg = await api('/api/doctors');
+    if (cfg.gated) { showExpired(); return; }
     applyCfg(cfg);
     $('#doc-sel').innerHTML = DOCTORS.map(d => `<option value="${d.id}">${esc(d.name)} — ${esc(d.specialty)}</option>`).join('');
     $('#doc-sel').value = sess.get('did') || DOCTORS[0].id;
