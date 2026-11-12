@@ -458,7 +458,7 @@ function showForm(id) {
     <div class="card formcard"><h3>${esc(f.title)}</h3><p class="muted">${esc(f.intro)}</p>
       ${f.samples && f.samples.length ? `<div class="muted" style="margin-bottom:8px">نمونه‌های سریع برای دمو: ${f.samples.map((s, i) => `<span class="chip" data-s="${i}">${esc(s.label)}</span>`).join('')}</div>` : ''}
       <form id="visit" class="grid">${f.fields.map(fieldHtml).join('')}${uploadHtml(f.upload)}
-        <div class="full muted">🔒 اطلاعات و عکس‌هایی که ارسال می‌کنید برای پزشک انتخابی و مدیر سامانه قابل مشاهده است. لطفاً اطلاعات شخصی و واقعی وارد نکنید.</div>
+        <div class="full muted">🔒 اطلاعات شما در سامانه پزشکی حفظ می‌شود.</div>
         <div class="full row"><button class="btn big" id="go" type="submit">ارسال به دستیار هوشمند</button><span id="err" class="no"></span></div>
       </form></div></div>`;
   decorate();
