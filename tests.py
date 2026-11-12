@@ -315,6 +315,27 @@ def test_end_to_end():
           and call("POST", f"/api/cases/{rj['id']}/chat", {"text": "x"})[0] == 403)
     check("صفحه‌ی اصلی بالا می‌آید", call("GET", "/", raw=True)[0] == 200)
 
+    # پنل مدیر
+    def adm(path, pin="9999", raw=False):
+        req = urllib.request.Request(base + path, headers={"X-Admin-Pin": pin})
+        try:
+            with urllib.request.urlopen(req) as r:
+                b = r.read()
+                return r.status, (b if raw else json.loads(b))
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read())
+    st, al = adm("/api/admin/cases")
+    check("مدیر: پرونده‌ی همه‌ی پزشکان را یک‌جا می‌بیند", st == 200 and al["total"] == len(al["cases"])
+          and {c["doctor"]["id"] for c in al["cases"]} >= {"sohrabi", "moradi", "mousavi", "karamati"})
+    check("مدیر: رمز غلط (401)", adm("/api/admin/cases", pin="1")[0] == 401)
+    st, im = adm(f"/api/admin/cases/{d1['id']}/images/0", raw=True)
+    check("مدیر: تصویر بیمار را می‌بیند", st == 200 and im[:4] == b"\x89PNG")
+    server.ADMIN_PIN = None
+    check("مدیر: بدون رمز تنظیم‌شده غیرفعال است (401)", adm("/api/admin/cases")[0] == 401)
+    server.ADMIN_PIN = "9999"
+    server._HITS.clear()
+    check("نظرات: نام کامل (حداقل دو بخش) برای همه‌ی پزشکان", all(len(r["name"].split()) >= 2 for d in tools.DOCTORS for r in d["reviews"]))
+
     # محدودیت‌های سرور عمومی
     check("رمز پیش‌فرض دمو فعال است (در غیاب متغیر محیطی)", call("GET", "/api/doctors")[1]["demo_pins"] is True)
     server._HITS.clear()
@@ -335,6 +356,124 @@ def test_end_to_end():
     return fails
 
 
+def test_calendar_assistant():
+    from datetime import datetime, date
+    import calendar_fa as cf
+    fails = 0
+
+    def check(name, cond):
+        nonlocal fails
+        print(f"{'PASS' if cond else 'FAIL'}  {name}")
+        fails += not cond
+
+    # --- تقویم و نوبت‌دهی (واحد)
+    check("تبدیل شمسی: ۲۰ آبان ۱۴۰۵", cf.to_jalali(2026, 11, 11) == (1405, 8, 20))
+    check("تبدیل شمسی: نوروز ۱۴۰۵ و ۱۴۰۴", cf.to_jalali(2026, 3, 21) == (1405, 1, 1) and cf.to_jalali(2025, 3, 21) == (1404, 1, 1))
+    check("تبدیل شمسی: آخر اسفند ۱۴۰۴ و اول مهر ۱۴۰۵", cf.to_jalali(2026, 3, 20) == (1404, 12, 29) and cf.to_jalali(2026, 9, 23) == (1405, 7, 1))
+    wed = datetime(2026, 11, 11, 17, 5, tzinfo=cf.IRAN)
+    check("نام روز هفته (چهارشنبه)", cf.date_fa(wed) == "چهارشنبه ۲۰ آبان ۱۴۰۵")
+    sch = {"days": [5, 6, 0, 1, 2], "start": "16:00", "end": "20:00", "slot": 20}
+    s1 = cf.next_slot(sch, set(), now_dt=wed)
+    check("اولین وقت: ۳۰ دقیقه بعد از الان، روی شبکه‌ی ۲۰ دقیقه‌ای", cf.time_fa(s1) == "۱۷:۴۰")
+    s2 = cf.next_slot(sch, {s1.isoformat()}, now_dt=wed)
+    check("وقت رزروشده رد می‌شود", cf.time_fa(s2) == "۱۸:۰۰")
+    late = datetime(2026, 11, 11, 19, 50, tzinfo=cf.IRAN)  # چهارشنبه، سه‌شنبه‌ها... بعد از ساعت کاری
+    s3 = cf.next_slot(sch, set(), now_dt=late)
+    check("بعد از ساعت کاری → روز کاری بعد (چهارشنبه پزشک کار نمی‌کند؛ شنبه)", s3.weekday() == 5 and cf.time_fa(s3) == "۱۶:۰۰" and s3.date() == date(2026, 11, 14))
+    fri = datetime(2026, 11, 13, 10, 0, tzinfo=cf.IRAN)
+    check("جمعه هیچ‌وقت نوبت نمی‌دهد", cf.next_slot({"days": [4], "start": "9:00", "end": "12:00", "slot": 30}, set(), now_dt=fri, horizon_days=0) is None
+          or cf.next_slot({"days": [4], "start": "9:00", "end": "12:00", "slot": 30}, set(), now_dt=fri).weekday() == 4)
+    check("همه‌ی پزشکان برنامه‌ی کاری دارند", all("schedule" in d and d["schedule"]["days"] for d in tools.DOCTORS))
+
+    # --- سرور با ساعت ثابت
+    tmp = tempfile.mkdtemp()
+    server.STORE_PATH = os.path.join(tmp, "store.json")
+    server.UPLOAD_DIR = os.path.join(tmp, "uploads")
+    server.ASSIST_PATH = os.path.join(tmp, "assistant_log.json")
+    server.CASES.clear()
+    server.ASSIST_LOG.clear()
+    server._HITS.clear()
+    real_now = cf.now
+    cf.now = lambda: datetime(2026, 11, 11, 17, 5, tzinfo=cf.IRAN)
+    srv = server.make_server("127.0.0.1", 0)
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+
+    def call(method, path, body=None, who=None, admin=False):
+        h = {"Content-Type": "application/json"}
+        if who:
+            h["X-Doctor-Id"], h["X-Doctor-Pin"] = who, PINS[who]
+        if admin:
+            h["X-Admin-Pin"] = "9999"
+        req = urllib.request.Request(base + path, method=method, headers=h, data=json.dumps(body).encode() if body is not None else None)
+        try:
+            with urllib.request.urlopen(req) as r:
+                return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read())
+
+    try:
+        st, r = call("GET", "/api/doctors")
+        check("لیست پزشکان: نزدیک‌ترین وقت و ساعت فعلی", st == 200 and r["doctors"][0]["next_slot"] == "چهارشنبه ۲۰ آبان ۱۴۰۵ ساعت ۱۷:۴۰" and "۲۰ آبان ۱۴۰۵" in r["now"])
+        preg = {"age": "28", "sex": "female", "pregnant": "بله", "allergies": "", "symptoms": "سرماخوردگی"}
+        st, c1 = call("POST", "/api/intake", {"doctor_id": "sohrabi", "answers": preg})
+        check("ارجاع حضوری → وقت واقعی (تاریخ، روز، ساعت)", c1["status"] == "referred" and c1["appointment"]["text"] == "چهارشنبه ۲۰ آبان ۱۴۰۵ ساعت ۱۷:۴۰")
+        st, c2 = call("POST", "/api/intake", {"doctor_id": "sohrabi", "answers": preg})
+        check("بیمار دوم همان وقت را نمی‌گیرد", c2["appointment"]["time"] == "۱۸:۰۰")
+        st, n = call("POST", f"/api/cases/{c1['id']}/reschedule", {})
+        check("جابه‌جایی → وقت بعدی آزاد (۱۸:۲۰ چون ۱۸:۰۰ رزرو است)", st == 200 and n["appointment"]["time"] == "۱۸:۲۰")
+        for _ in range(2):
+            st, n = call("POST", f"/api/cases/{c1['id']}/reschedule", {})
+        check("بعد از ۳ بار جابه‌جایی (429)", call("POST", f"/api/cases/{c1['id']}/reschedule", {})[0] == 429)
+        check("نوبت در لیست پزشک دیده می‌شود", any(x["id"] == c1["id"] and x["appointment"] for x in call("GET", "/api/cases", who="sohrabi")[1]["cases"]))
+        st, em = call("POST", "/api/intake", {"doctor_id": "sohrabi", "answers": {"age": "50", "sex": "male", "allergies": "", "symptoms": "درد قفسه سینه"}})
+        check("اورژانس → نوبت داده نمی‌شود و جابه‌جایی ممنوع (409)", em["status"] == "emergency" and not em.get("appointment")
+              and call("POST", f"/api/cases/{em['id']}/reschedule", {})[0] == 409)
+        check("جابه‌جایی پرونده‌ی ناموجود (404)", call("POST", "/api/cases/00000000/reschedule", {})[0] == 404)
+        dent = {"age": "30", "sex": "female", "pregnant": "خیر", "complaint": "دندان‌درد", "severity": "5", "duration_days": "3", "swelling": "خیر", "fever": "خیر", "symptoms": "دندان‌درد"}
+        st, d = call("POST", "/api/intake", {"doctor_id": "mousavi", "answers": dent})
+        st, a = call("POST", f"/api/cases/{d['id']}/approve", {}, who="mousavi")
+        check("تأیید دندان‌پزشک → وقت ویزیت (شنبه ۲۳ آبان ساعت ۱۰:۰۰)", st == 200 and a["appointment"]["text"] == "شنبه ۲۳ آبان ۱۴۰۵ ساعت ۱۰:۰۰")
+        check("زمان‌های ثبت به شمسی (ایران)", c1["created"].startswith("چهارشنبه ۲۰ آبان ۱۴۰۵"))
+
+        # --- دستیار پزشکی
+        os.environ.pop("ANTHROPIC_API_KEY", None)
+        check("بدون کلید: دستیار غیرفعال اعلام می‌شود", call("GET", "/api/doctors")[1]["assistant"] is False)
+        check("بدون کلید → ۵۰۳", call("POST", "/api/assistant", {"messages": [{"role": "user", "content": "پاراستامول چیست؟"}]})[0] == 503)
+        calls = []
+        real_api = agent._call_api
+        agent._call_api = lambda payload: (calls.append(payload), {"content": [{"type": "text", "text": "پاراستامول مسکن و تب‌بر است."}]})[1]
+        os.environ["ANTHROPIC_API_KEY"] = "test"
+        try:
+            check("با کلید: فعال", call("GET", "/api/doctors")[1]["assistant"] is True)
+            st, r = call("POST", "/api/assistant", {"messages": [{"role": "user", "content": "ایبوپروفن چه عوارضی دارد؟"}]})
+            check("سؤال دارویی آزاد (خارج از فهرست نمونه) پاسخ می‌گیرد", st == 200 and r["mode"] == "llm" and "پاراستامول" in r["reply"] and len(calls) == 1
+                  and "NOT a doctor" in calls[0]["system"])
+            n0 = len(calls)
+            st, r = call("POST", "/api/assistant", {"messages": [{"role": "user", "content": "درد قفسه سینه و تنگی نفس دارم"}]})
+            check("علامت خطر → هشدار ثابت ۱۱۵ و بدون صدا زدن مدل", st == 200 and r["mode"] == "emergency" and "۱۱۵" in r["reply"] and len(calls) == n0)
+            check("ورودی نامعتبر (400)", call("POST", "/api/assistant", {"messages": []})[0] == 400
+                  and call("POST", "/api/assistant", {"messages": [{"role": "assistant", "content": "x"}]})[0] == 400
+                  and call("POST", "/api/assistant", {})[0] == 400)
+            check("مدیر لاگ پرسش‌های دستیار را می‌بیند", len(call("GET", "/api/admin/cases", admin=True)[1]["assistant"]) == 2)
+            agent._call_api = lambda payload: (_ for _ in ()).throw(RuntimeError("boom"))
+            check("خطای مدل → ۵۰۲", call("POST", "/api/assistant", {"messages": [{"role": "user", "content": "سلام"}]})[0] == 502)
+            old = server.RATE_ASSIST
+            server.RATE_ASSIST = 0
+            check("سقف سؤال در ساعت (429)", call("POST", "/api/assistant", {"messages": [{"role": "user", "content": "سلام"}]})[0] == 429)
+            server.RATE_ASSIST = old
+        finally:
+            agent._call_api = real_api
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+    finally:
+        cf.now = real_now
+        srv.shutdown()
+        server.CASES.clear()
+        server.ASSIST_LOG.clear()
+        server._HITS.clear()
+    return fails
+
+
 if __name__ == "__main__":
     total = 0
     print("── سناریوهای بالینی (۴ پزشک) ──")
@@ -345,5 +484,7 @@ if __name__ == "__main__":
     total += test_llm_mock()
     print("\n── جریان کامل (HTTP) ──")
     total += test_end_to_end()
+    print("\n── تقویم، نوبت‌دهی و دستیار پزشکی ──")
+    total += test_calendar_assistant()
     print("\n" + ("همه‌ی تست‌ها موفق بود ✔" if total == 0 else f"{total} تست ناموفق"))
     sys.exit(1 if total else 0)

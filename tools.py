@@ -8,6 +8,8 @@ import os
 import re
 import time
 
+import calendar_fa
+
 BASE = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -355,6 +357,6 @@ def call_tool(ctx, name, args):
         "tool": name,
         "input": args or {},
         "output": out,
-        "ts": time.strftime("%H:%M:%S"),
+        "ts": calendar_fa.now().strftime("%H:%M:%S"),
     })
     return out

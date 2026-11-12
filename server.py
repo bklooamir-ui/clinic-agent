@@ -11,9 +11,11 @@ import secrets
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
 import agent
+import calendar_fa
 import tools
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -23,6 +25,9 @@ UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 MAX_CASES = int(os.environ.get("MAX_CASES", "500"))          # سقف کل پرونده‌ها (جلوگیری از پر شدن دیسک)
 RATE_INTAKE = int(os.environ.get("RATE_INTAKE", "60"))        # ثبت بیمار در ساعت برای هر IP
 MAX_AUTH_FAILS = int(os.environ.get("MAX_AUTH_FAILS", "10"))  # ورود ناموفق پزشک در ۱۰ دقیقه برای هر IP
+RATE_ASSIST = int(os.environ.get("RATE_ASSIST", "30"))        # سؤال از دستیار پزشکی در ساعت برای هر IP
+ASSIST_PATH = os.path.join(DATA_DIR, "assistant_log.json")
+ASSIST_LOG = []
 IMG_DIR = os.path.join(BASE, "images")
 MAX_BODY = 8_000_000
 MAX_IMG = 2_500_000
@@ -42,6 +47,9 @@ for _d in DOCTORS.values():
     _p = os.environ.get("PIN_" + _d["id"].upper())
     if _p:
         _d["pin"], DEMO_PINS = _p, False
+
+# رمز مدیر (دیدن همه‌ی پرونده‌ها). روی سرور عمومی باید با متغیر ADMIN_PIN تنظیم شود؛ وگرنه غیرفعال است.
+ADMIN_PIN = os.environ.get("ADMIN_PIN") or ("9999" if DEMO_PINS else None)
 
 _HITS = {}  # (نام سطل, ip) -> زمان رخدادها
 
@@ -80,6 +88,22 @@ def _save():
         pass
 
 
+def _load_assist():
+    try:
+        with open(ASSIST_PATH, encoding="utf-8") as f:
+            ASSIST_LOG[:] = json.load(f)[-200:]
+    except Exception:
+        pass
+
+
+def _save_assist():
+    try:
+        with open(ASSIST_PATH, "w", encoding="utf-8") as f:
+            json.dump(ASSIST_LOG, f, ensure_ascii=False, indent=1)
+    except Exception:
+        pass
+
+
 def _new_code(kind):
     while True:
         raw = "".join(secrets.choice(CODE_ALPHABET) for _ in range(8))
@@ -93,7 +117,7 @@ def _norm_code(s):
 
 
 def _add_chat(c, who, text):
-    c.setdefault("chat", []).append({"from": who, "text": text, "ts": time.strftime("%H:%M")})
+    c.setdefault("chat", []).append({"from": who, "text": text, "ts": calendar_fa.now().strftime("%H:%M")})
 
 
 # ---------------------------------------------------------------- پاک‌سازی ورودی
@@ -183,7 +207,7 @@ def public_doctor(d):
 
 def public_case(c, include_trace=True):
     """نمای قابل‌نمایش به بیمار (کد فقط بعد از تأیید یا پذیرش پزشک)."""
-    out = {k: c.get(k) for k in ("id", "status", "outcome", "message", "mode", "created", "doctor_note", "routing", "code_type")}
+    out = {k: c.get(k) for k in ("id", "status", "outcome", "message", "mode", "created", "doctor_note", "routing", "code_type", "appointment")}
     d = DOCTORS.get(c.get("doctor_id"))
     out["doctor"] = ({"id": d["id"], "name": d["name"], "specialty": d["specialty"], "color": d["color"],
                       "soft": d["soft"], "style": d["style"]} if d else None)
@@ -195,6 +219,20 @@ def public_case(c, include_trace=True):
     if include_trace:
         out["trace"] = c.get("trace", [])
     return out
+
+
+def _taken(doctor_id, exclude=None):
+    """نوبت‌های رزروشده‌ی یک پزشک (باید داخل LOCK صدا زده شود)."""
+    return {c["appointment"]["iso"] for c in CASES.values()
+            if c.get("appointment") and c["doctor_id"] == doctor_id and c["id"] != exclude and c["status"] != "rejected"}
+
+
+def _book(c, after=None):
+    """اولین وقت آزاد پزشک را (بر اساس ساعت واقعی ایران) برای این پرونده رزرو می‌کند. داخل LOCK صدا زده شود."""
+    d = DOCTORS[c["doctor_id"]]
+    slot = calendar_fa.next_slot(d["schedule"], _taken(d["id"], c["id"]), after=after)
+    c["appointment"] = calendar_fa.describe(slot, d["schedule"]) if slot else None
+    return c["appointment"]
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -244,6 +282,17 @@ class Handler(BaseHTTPRequestHandler):
             _hit("authfail", ip, 600)
         return None
 
+    def _admin(self):
+        ip = self._ip()
+        if not ADMIN_PIN or _count("authfail", ip, 600) >= MAX_AUTH_FAILS:
+            return False
+        raw = self.headers.get("X-Admin-Pin", "")
+        if secrets.compare_digest(raw.encode("utf-8", "ignore"), ADMIN_PIN.encode()):
+            return True
+        if raw:
+            _hit("authfail", ip, 600)
+        return False
+
     # ---------- GET
     def do_GET(self):
         path = urlparse(self.path).path
@@ -263,7 +312,44 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(404, {"error": "یافت نشد"})
 
         if path == "/api/doctors":
-            return self._json(200, {"doctors": [public_doctor(d) for d in tools.DOCTORS], "demo_pins": DEMO_PINS})
+            with LOCK:
+                docs = []
+                for d in tools.DOCTORS:
+                    pd = public_doctor(d)
+                    s = calendar_fa.next_slot(d["schedule"], _taken(d["id"]))
+                    pd["next_slot"] = calendar_fa.describe(s, d["schedule"])["text"] if s else None
+                    docs.append(pd)
+            return self._json(200, {"doctors": docs, "demo_pins": DEMO_PINS,
+                                    "assistant": agent.llm_available(), "now": calendar_fa.stamp()})
+
+        # ---------- پنل مدیر: همه‌ی پرونده‌ها
+        if path == "/api/admin/cases":
+            if not self._admin():
+                return self._json(401, {"error": "رمز مدیر نادرست است یا تنظیم نشده"})
+            with LOCK:
+                items = sorted(CASES.values(), key=lambda c: c["created_ts"], reverse=True)
+                return self._json(200, {"total": len(items), "assistant": list(reversed(ASSIST_LOG))[:100], "cases": [
+                    dict(public_case(c, include_trace=False), patient=c["patient"], symptoms=c["symptoms"],
+                         answers_display=c.get("answers_display", []), code=c.get("code"),
+                         risk_reasons=c.get("risk_reasons", []))
+                    for c in items]})
+
+        m = re.fullmatch(r"/api/admin/cases/([0-9a-f]{8})/images/(\d)", path)
+        if m:
+            if not self._admin():
+                return self._json(401, {"error": "رمز مدیر نادرست است یا تنظیم نشده"})
+            with LOCK:
+                c = CASES.get(m.group(1))
+                imgs = c.get("images", []) if c else []
+                idx = int(m.group(2))
+                info = imgs[idx] if idx < len(imgs) else None
+            if not info:
+                return self._json(404, {"error": "یافت نشد"})
+            fp = os.path.join(UPLOAD_DIR, os.path.basename(info["file"]))
+            if not os.path.isfile(fp):
+                return self._json(404, {"error": "فایل یافت نشد"})
+            with open(fp, "rb") as f:
+                return self._raw(200, info["mime"], f.read(), cache="private, max-age=60")
 
         m = re.fullmatch(r"/api/cases/([0-9a-f]{8})", path)
         if m:
@@ -335,6 +421,43 @@ class Handler(BaseHTTPRequestHandler):
         if data is None:
             return self._json(413, {"error": "حجم درخواست زیاد است؛ تصویرها را کوچک‌تر کنید"})
 
+        # ---------- دستیار پزشکی (پرسش و پاسخ آزاد؛ نیازمند کلید API)
+        if path == "/api/assistant":
+            if _hit("assist", self._ip(), 3600) > RATE_ASSIST:
+                return self._json(429, {"error": "تعداد سؤال‌ها زیاد است؛ کمی بعد دوباره تلاش کنید"})
+            raw = data.get("messages")
+            clean = []
+            for m in (raw[-10:] if isinstance(raw, list) else []):
+                if isinstance(m, dict) and m.get("role") in ("user", "assistant"):
+                    t = str(m.get("content", "")).strip()[:1000]
+                    if t:
+                        clean.append({"role": m["role"], "content": t})
+            while clean and clean[0]["role"] != "user":
+                clean.pop(0)
+            if not clean or clean[-1]["role"] != "user":
+                return self._json(400, {"error": "سؤال خود را بنویسید"})
+            last, mode = clean[-1]["content"], "llm"
+            flags = tools.scan_red_flags(last)
+            if flags:  # گارد: علامت خطر → پیام اورژانسی ثابت، بدون پرسیدن از مدل
+                mode = "emergency"
+                reply = ("⚠ پیام شما شامل علائم هشداردهنده است (" + "؛ ".join(f["label"] for f in flags) + "). "
+                         "لطفاً همین الان با اورژانس ۱۱۵ تماس بگیرید یا به نزدیک‌ترین مرکز درمانی مراجعه کنید. "
+                         "این دستیار برای موارد اورژانسی مناسب نیست.")
+            elif not agent.llm_available():
+                return self._json(503, {"error": "دستیار پزشکی فعلاً غیرفعال است (کلید ANTHROPIC_API_KEY روی سرور تنظیم نشده)"})
+            else:
+                try:
+                    reply = agent.ask_assistant(clean)
+                except Exception:
+                    reply = ""
+                if not reply:
+                    return self._json(502, {"error": "پاسخی از مدل دریافت نشد؛ کمی بعد دوباره تلاش کنید"})
+            with LOCK:
+                ASSIST_LOG.append({"ts": calendar_fa.stamp(), "q": last, "a": reply, "mode": mode})
+                del ASSIST_LOG[:-200]
+                _save_assist()
+            return self._json(200, {"reply": reply, "mode": mode})
+
         # ---------- ثبت بیمار
         if path == "/api/intake":
             if _hit("intake", self._ip(), 3600) > RATE_INTAKE:
@@ -389,7 +512,7 @@ class Handler(BaseHTTPRequestHandler):
                 saved.append({"file": fn, "mime": mime})
             outcome = ctx["outcome"]["type"]
             case = {
-                "id": cid, "created": time.strftime("%Y-%m-%d %H:%M:%S"), "created_ts": time.time(),
+                "id": cid, "created": calendar_fa.stamp(), "created_ts": time.time(),
                 "doctor_id": doc["id"], "patient": patient, "symptoms": symptoms, "answers_display": display,
                 "status": OUTCOME_STATUS[outcome], "outcome": ctx["outcome"], "message": ctx["message"],
                 "mode": ctx["mode"], "flags": ctx.get("flags", []), "risk_reasons": ctx.get("risk_reasons", []),
@@ -398,6 +521,8 @@ class Handler(BaseHTTPRequestHandler):
                 "images": saved, "chat": [],
             }
             with LOCK:
+                if case["status"] == "referred":  # ارجاع حضوری → نزدیک‌ترین وقت واقعی پزشک
+                    _book(case)
                 CASES[cid] = case
                 _save()
             return self._json(200, public_case(case))
@@ -423,8 +548,10 @@ class Handler(BaseHTTPRequestHandler):
                     c["code"] = _new_code("visit")
                     c["approved_drugs"] = []
                     c["doctor_note"] = note
-                    c["approved_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+                    c["approved_at"] = calendar_fa.stamp()
                     c["message"] = f"{doc['name']} پرونده‌ی شما را پذیرفت. این «کد پذیرش» شماست؛ از بخش گفتگو می‌توانید با ایشان در ارتباط باشید."
+                    if not c.get("appointment"):
+                        _book(c)
                     _add_chat(c, "system", "پرونده‌ی شما پذیرفته شد. سؤال یا توضیح بیشتر خود را همین‌جا بنویسید.")
                 else:
                     if c["status"] != "pending_doctor":
@@ -452,9 +579,32 @@ class Handler(BaseHTTPRequestHandler):
                             _add_chat(c, "system", "پرونده‌ی شما تأیید شد. سؤال یا توضیح بیشتر خود را همین‌جا بنویسید.")
                         c["code"] = _new_code(c["code_type"])
                         c["status"] = "approved"
-                        c["approved_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+                        c["approved_at"] = calendar_fa.stamp()
+                        if kind == "summary" and not c.get("appointment"):  # دندان‌پزشکی/زنان: وقت ویزیت
+                            _book(c)
                 if note and c["status"] in CHAT_OPEN:
                     _add_chat(c, "doctor", note)
+                _save()
+                return self._json(200, public_case(c, include_trace=False))
+
+        # ---------- جابه‌جایی وقت (اولین وقت آزاد بعدی)
+        m = re.fullmatch(r"/api/cases/([0-9a-f]{8})/reschedule", path)
+        if m:
+            with LOCK:
+                c = CASES.get(m.group(1))
+                if not c:
+                    return self._json(404, {"error": "یافت نشد"})
+                if not c.get("appointment") or c["status"] in ("emergency", "rejected", "dispensed"):
+                    return self._json(409, {"error": "برای این پرونده وقتی قابل جابه‌جایی نیست"})
+                if c.get("resched", 0) >= 3:
+                    return self._json(429, {"error": "حداکثر ۳ بار می‌توانید وقت را جابه‌جا کنید"})
+                d = DOCTORS[c["doctor_id"]]
+                cur = datetime.fromisoformat(c["appointment"]["iso"])
+                slot = calendar_fa.next_slot(d["schedule"], _taken(d["id"], c["id"]), after=cur + timedelta(minutes=1))
+                if not slot:
+                    return self._json(409, {"error": "وقت خالی دیگری در ۳ هفته‌ی آینده نیست"})
+                c["appointment"] = calendar_fa.describe(slot, d["schedule"])
+                c["resched"] = c.get("resched", 0) + 1
                 _save()
                 return self._json(200, public_case(c, include_trace=False))
 
@@ -502,7 +652,7 @@ class Handler(BaseHTTPRequestHandler):
                         if c["status"] == "dispensed":
                             return self._json(409, {"error": "این نسخه قبلاً تحویل داده شده است"})
                         c["status"] = "dispensed"
-                        c["dispensed_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+                        c["dispensed_at"] = calendar_fa.stamp()
                         _save()
                         return self._json(200, {"status": "dispensed", "dispensed_at": c["dispensed_at"]})
             return self._json(404, {"error": "نسخه‌ای با این کد پیدا نشد"})
@@ -517,6 +667,7 @@ def make_server(host="127.0.0.1", port=8000):
 
 if __name__ == "__main__":
     _load()
+    _load_assist()
     # روی Render متغیر PORT تنظیم است و باید روی همه‌ی آدرس‌ها گوش داد؛ لوکال فقط روی 127.0.0.1
     host = os.environ.get("HOST") or ("0.0.0.0" if os.environ.get("PORT") else "127.0.0.1")
     port = int(os.environ.get("PORT", "8000"))
@@ -524,6 +675,9 @@ if __name__ == "__main__":
     print(f"http://{host}:{port}   (حالت ایجنت: {mode})", flush=True)
     if DEMO_PINS:
         print("رمزهای دمو: سهرابی 1111 | مرادی 2222 | موسوی 3333 | کرامتی 4444", flush=True)
+        print("رمز مدیر (تب «مدیر»): 9999", flush=True)
     else:
         print("رمز پزشکان از متغیرهای محیطی خوانده شد.", flush=True)
+        if not ADMIN_PIN:
+            print("هشدار: ADMIN_PIN تنظیم نشده؛ تب «مدیر» غیرفعال است.", flush=True)
     make_server(host, port).serve_forever()

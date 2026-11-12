@@ -147,6 +147,15 @@
   .spin { display:inline-block; width:14px; height:14px; border:2px solid currentColor; border-top-color:transparent;
     border-radius:50%; animation:r .8s linear infinite; vertical-align:-2px; margin-left:6px; }
   @keyframes r { to { transform:rotate(360deg); } }
+  #clock { margin-top:6px; font-size:13px; opacity:.92; }
+  .appt { background:#fff; border:1px dashed currentColor; border-radius:10px; padding:8px 12px; margin:8px 0; font-weight:700; }
+  .nextslot { font-size:12.5px; color:var(--accent); margin:4px 0; font-weight:700; }
+  .as-log { display:flex; flex-direction:column; gap:6px; max-height:420px; overflow-y:auto; padding:8px; background:var(--gray-bg); border-radius:10px; margin:8px 0; min-height:80px; }
+  .as-log .msg { max-width:92%; white-space:pre-wrap; }
+  .as-log .me { align-self:flex-start; background:#12343b; color:#fff; }
+  .as-log .them { align-self:flex-end; background:#fff; border:1px solid var(--line); }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0; }
+  .chips button { border:1px solid var(--line); background:#fff; border-radius:999px; padding:5px 11px; cursor:pointer; font:inherit; font-size:13px; }
   .disclaimer { font-size:12.5px; color:var(--muted); text-align:center; margin-top:14px; }
   @media (max-width:640px) { .hero-art { display:none; } .hero h2 { font-size:18px; } }
 </style>
@@ -155,16 +164,32 @@
 <header>
   <h1>کلینیک هوشمند — پیش‌غربالگری و ویزیت آنلاین</h1>
   <p>نسخه آزمایشی دانشجویی. ایجنت جایگزین پزشک نیست و هیچ نسخه یا کدی بدون تأیید پزشک صادر نمی‌شود.</p>
+  <div id="clock" aria-live="off"></div>
 </header>
 
 <main>
   <div class="tabs">
     <button class="tab on" data-tab="patient">بیمار</button>
+    <button class="tab" data-tab="assistant">دستیار پزشکی</button>
     <button class="tab" data-tab="doctor">پزشک</button>
     <button class="tab" data-tab="pharmacy">داروخانه</button>
+    <button class="tab" data-tab="admin">مدیر</button>
   </div>
 
   <section id="tab-patient"><div id="patient-root"><div class="card muted">در حال بارگذاری…</div></div></section>
+
+  <section id="tab-assistant" class="hide">
+    <div class="card">
+      <h3>دستیار پزشکی</h3>
+      <div class="muted">پرسش و پاسخ آزاد درباره‌ی دارو، بیماری و پیشگیری (اطلاعات عمومی). تشخیص و تجویز شخصی نمی‌دهد.</div>
+      <div id="as-off" class="banner b-amber hide" style="margin-top:8px">دستیار فعلاً غیرفعال است (کلید ANTHROPIC_API_KEY روی سرور تنظیم نشده).</div>
+      <div class="chips" id="as-chips"></div>
+      <div class="as-log" id="as-log"></div>
+      <div class="row"><input id="as-in" maxlength="1000" placeholder="سؤال پزشکی خود را بنویسید…" style="flex:1"><button class="btn" id="as-send">ارسال</button><button class="btn ghost" id="as-clear">پاک‌کردن</button></div>
+      <div id="as-err" class="no" style="margin-top:6px"></div>
+      <div class="muted" style="margin-top:6px">در شرایط اورژانسی با ۱۱۵ تماس بگیرید. این پاسخ‌ها جایگزین پزشک نیستند.</div>
+    </div>
+  </section>
 
   <section id="tab-doctor" class="hide">
     <div class="card">
@@ -175,7 +200,7 @@
         <span id="doc-err" class="no"></span>
       </div>
       <details id="pin-hint"><summary>رمزهای دمو</summary>
-        <div class="muted">سهرابی ۱۱۱۱ · مرادی ۲۲۲۲ · موسوی ۳۳۳۳ · کرامتی ۴۴۴۴</div></details>
+        <div class="muted">سهرابی ۱۱۱۱ · مرادی ۲۲۲۲ · موسوی ۳۳۳۳ · کرامتی ۴۴۴۴ · مدیر ۹۹۹۹</div></details>
     </div>
     <div id="doctor-list"></div>
   </section>
@@ -192,7 +217,21 @@
     <div id="ph-result"></div>
   </section>
 
-  <p class="disclaimer">این پروژه یک نمونه آموزشی است. پزشکان، بیوگرافی‌ها، نظرات و داده‌های دارویی نمونه و فرضی‌اند.</p>
+  <section id="tab-admin" class="hide">
+    <div class="card">
+      <div class="row">
+        <label style="margin:0">رمز مدیر</label>
+        <input id="adm-pin" type="password" style="max-width:140px">
+        <button class="btn" id="adm-go">ورود</button>
+        <button class="btn ghost" id="adm-dl">دانلود همه‌ی پرونده‌ها (JSON)</button>
+        <span id="adm-err" class="no"></span>
+      </div>
+      <div class="muted" id="adm-sum" style="margin-top:6px"></div>
+    </div>
+    <div id="admin-list"></div>
+  </section>
+
+  <p class="disclaimer">این سامانه فاقد اعتبار پزشکی و درمانی است.</p>
 </main>
 
 <script>
@@ -289,8 +328,9 @@ let currentTab = 'patient';
 document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
   currentTab = b.dataset.tab;
   document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === b));
-  ['patient', 'doctor', 'pharmacy'].forEach(t => $('#tab-' + t).classList.toggle('hide', t !== currentTab));
+  ['patient', 'assistant', 'doctor', 'pharmacy', 'admin'].forEach(t => $('#tab-' + t).classList.toggle('hide', t !== currentTab));
   if (currentTab === 'doctor') loadDoctor(true);
+  if (currentTab === 'admin') loadAdmin(true);
 });
 
 /* ================= بیمار: لیست پزشکان ================= */
@@ -307,6 +347,7 @@ function showHome() {
       <div class="stars">${stars(avg(d))} <span class="small muted">${fa(avg(d))}</span></div>
       <div class="small muted">${fa(d.experience)} سال سابقه · ${d.gender === 'female' ? 'پزشک خانم' : 'پزشک آقا'}</div>
       <div class="tg">${esc(d.tagline)}</div>
+      <div class="nextslot">🗓 ${esc(d.next_slot || 'وقت خالی ندارد')}</div>
       <button class="btn" type="button">مشاهده پروفایل</button></div>`).join('')}</div>`;
   root().querySelectorAll('.dcard').forEach(c => {
     c.onclick = () => showProfile(c.dataset.doc);
@@ -329,7 +370,9 @@ function showProfile(id) {
       <div>${d.expertise.map(x => `<span class="skill">${esc(x)}</span>`).join('')}</div>
       <div class="stats"><div class="stat"><b>${fa(d.experience)}</b>سال سابقه</div>
         <div class="stat"><b>${fa(avg(d))}</b>امتیاز بیماران</div>
-        <div class="stat"><b>${esc(d.specialty)}</b>تخصص</div></div></div>
+        <div class="stat"><b>${esc(d.specialty)}</b>تخصص</div></div>
+      <p style="margin:10px 0 0">🕒 <b>ساعات حضور:</b> ${esc(d.schedule.label)}</p>
+      <p class="nextslot" style="margin:2px 0 0">🗓 نزدیک‌ترین وقت خالی: ${esc(d.next_slot || 'در ۳ هفته‌ی آینده وقت خالی نیست')}</p></div>
     <div class="card"><h3>نظرات بیماران <span class="tag">نمونه — فرضی برای دمو</span></h3>
       ${d.reviews.map(r => `<div class="rev"><div class="row"><span class="who">${esc(r.name)}</span><span class="stars">${stars(r.rating)}</span><span class="sp"></span><span class="muted small">${esc(r.date)}</span></div><div>${esc(r.text)}</div></div>`).join('')}</div>
     <div class="cta"><button class="btn big" id="visit">ورود به بخش ویزیت</button></div></div>`;
@@ -415,6 +458,7 @@ function showForm(id) {
     <div class="card formcard"><h3>${esc(f.title)}</h3><p class="muted">${esc(f.intro)}</p>
       ${f.samples && f.samples.length ? `<div class="muted" style="margin-bottom:8px">نمونه‌های سریع برای دمو: ${f.samples.map((s, i) => `<span class="chip" data-s="${i}">${esc(s.label)}</span>`).join('')}</div>` : ''}
       <form id="visit" class="grid">${f.fields.map(fieldHtml).join('')}${uploadHtml(f.upload)}
+        <div class="full muted">🔒 اطلاعات و عکس‌هایی که ارسال می‌کنید برای پزشک انتخابی و مدیر سامانه قابل مشاهده است. لطفاً اطلاعات شخصی و واقعی وارد نکنید.</div>
         <div class="full row"><button class="btn big" id="go" type="submit">ارسال به دستیار هوشمند</button><span id="err" class="no"></span></div>
       </form></div></div>`;
   decorate();
@@ -477,17 +521,23 @@ function draftBody(c, status) {
 }
 const msgsHtml = (chat, me) => (chat || []).map(m => `<div class="msg ${m.from === me ? 'me' : m.from === 'system' ? 'sys' : 'them'}">${esc(m.text)}<span class="ts">${esc(m.ts)}</span></div>`).join('');
 
+function apptHtml(c) {
+  if (!c.appointment) return `<div class="appt">⚠ فعلاً وقت خالی‌ای در ۳ هفته‌ی آینده پیدا نشد؛ با مطب تماس بگیرید.</div>`;
+  const a = c.appointment;
+  return `<div class="appt">🗓 وقت ویزیت حضوری: ${esc(a.text)} (به وقت ایران، حدود ${fa(a.minutes)} دقیقه)</div>
+    <button class="btn ghost" type="button" data-resched="${esc(c.id)}">این وقت مناسب نیست؛ وقت بعدی</button> <span class="no" id="resched-err"></span>`;
+}
 function topHtml(c) {
   const dn = c.doctor ? c.doctor.name : 'پزشک';
   let h = '';
   if (c.status === 'emergency') h = `<div class="banner b-red"><h3>⚠ نیاز به بررسی فوری</h3>${esc(c.message)}</div>`;
-  else if (c.status === 'referred') h = `<div class="banner b-amber"><h3>لازم است پزشک شما را ببیند<span class="spin"></span></h3>${esc(c.message)}</div>`;
+  else if (c.status === 'referred') h = `<div class="banner b-amber"><h3>لازم است پزشک شما را حضوری ببیند<span class="spin"></span></h3>${esc(c.message)}${apptHtml(c)}</div>`;
   else if (c.status === 'pending_doctor') h = `<div class="banner b-blue"><h3>در انتظار تأیید ${esc(dn)}<span class="spin"></span></h3>${esc(c.message)}</div>`;
   else if (OPEN.includes(c.status)) {
     const visit = c.code_type === 'visit';
     h = `<div class="banner b-green"><h3>✔ ${visit ? 'پرونده‌ی شما پذیرفته شد' : 'نسخه‌ی شما تأیید شد'}</h3>${esc(c.message)}
       <div class="muted" style="color:inherit">${visit ? 'کد پذیرش ویزیت' : 'کد نسخه برای داروخانه'}:</div><div class="code">${esc(c.code)}</div>
-      ${c.status === 'dispensed' ? '<div>این نسخه در داروخانه تحویل داده شده است.</div>' : ''}</div>`;
+      ${c.status === 'dispensed' ? '<div>این نسخه در داروخانه تحویل داده شده است.</div>' : ''}${visit ? apptHtml(c) : ''}</div>`;
   } else if (c.status === 'rejected') h = `<div class="banner b-amber"><h3>پیش‌نویس تأیید نشد</h3>${esc(c.message)}</div>`;
   if (c.routing && c.routing.suggested_doctor) {
     const s = c.routing.suggested_doctor;
@@ -505,6 +555,10 @@ function chatCardHtml(c) {
 function renderTop(c) {
   $('#res-top').innerHTML = topHtml(c);
   $('#res-top').querySelectorAll('[data-goto]').forEach(b => b.onclick = () => showProfile(b.dataset.goto));
+  $('#res-top').querySelectorAll('[data-resched]').forEach(b => b.onclick = async () => {
+    try { const n = await post(`/api/cases/${b.dataset.resched}/reschedule`, {}); n.trace = lastCase ? lastCase.trace : []; lastCase = n; renderTop(n); }
+    catch (e) { const el = $('#resched-err'); if (el) el.textContent = e.message; }
+  });
 }
 function renderChat(c) {
   const holder = $('#res-chat');
@@ -538,7 +592,7 @@ async function pollOnce() {
   try {
     const c = await api(`/api/cases/${curCaseId}?lite=1`);
     c.trace = lastCase ? lastCase.trace : [];
-    const sig = s => JSON.stringify([s.status, s.code, s.message, s.approved_drugs]);
+    const sig = s => JSON.stringify([s.status, s.code, s.message, s.approved_drugs, s.appointment]);
     const changed = !lastCase || sig(c) !== sig(lastCase);
     lastCase = c;
     if (changed) renderTop(c);
@@ -563,7 +617,7 @@ async function loadDoctor(force) {
   try {
     const { doctor, cases } = await api('/api/cases', { headers: dHeaders() });
     $('#doc-err').textContent = '';
-    const sig = doctor.id + cases.map(c => c.id + c.status + (c.chat || []).length + c.chat_alert).join('|');
+    const sig = doctor.id + cases.map(c => c.id + c.status + (c.chat || []).length + c.chat_alert + (c.appointment ? c.appointment.iso : '')).join('|');
     if (!force && sig === lastSig) return;
     lastSig = sig; renderDoctor(doctor, cases);
   } catch (e) { $('#doc-err').textContent = e.message; }
@@ -632,6 +686,7 @@ function caseCard(doc, c) {
       <span class="muted">${p.age} ساله${p.sex ? (p.sex === 'female' ? ' · زن' : ' · مرد') : ''}${p.pregnant ? ' · باردار' : ''}</span>
       <span class="sp"></span>${badge(c.status)}<span class="muted">${esc(c.created)}</span></div>
     <p style="margin:6px 0"><b>شرح حال:</b> ${esc(c.symptoms)}</p>
+    ${c.appointment ? `<div class="muted">🗓 وقت ویزیت: <b>${esc(c.appointment.text)}</b></div>` : ''}
     <div class="qa">${(c.answers_display || []).map(a => `<span><i>${esc(a.label)}:</i> ${esc(a.value)}</span>`).join('')}</div>
     ${thumbsHtml(c)}
     <div style="margin-top:8px">${body}</div>${traceHtml(c)}</div>`;
@@ -670,12 +725,119 @@ function renderPharmacy(r) {
   };
 }
 
+/* ================= مدیر: دیدن همه‌ی پاسخ‌ها ================= */
+const aHeaders = () => ({ 'X-Admin-Pin': sess.get('apin') });
+let aSig = '';
+$('#adm-pin').value = sess.get('apin');
+$('#adm-go').onclick = () => { sess.set('apin', $('#adm-pin').value); aSig = ''; loadAdmin(true); };
+$('#adm-pin').onkeydown = e => { if (e.key === 'Enter') $('#adm-go').click(); };
+$('#adm-dl').onclick = async () => {
+  try {
+    const r = await api('/api/admin/cases', { headers: { 'X-Admin-Pin': $('#adm-pin').value || sess.get('apin') } });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(r, null, 1)], { type: 'application/json' }));
+    a.download = 'clinic-cases.json'; a.click();
+  } catch (e) { $('#adm-err').textContent = e.message; }
+};
+async function loadAdmin(force) {
+  if (!sess.get('apin')) return;
+  try {
+    const r = await api('/api/admin/cases', { headers: aHeaders() });
+    $('#adm-err').textContent = '';
+    const sig = r.cases.map(c => c.id + c.status + (c.chat || []).length + (c.appointment ? c.appointment.iso : '')).join('|') + '#' + (r.assistant || []).length;
+    if (!force && sig === aSig) return;
+    aSig = sig; renderAdmin(r);
+  } catch (e) { $('#adm-err').textContent = e.message; }
+}
+function renderAdmin(r) {
+  $('#adm-sum').textContent = `تعداد کل پرونده‌ها: ${fa(r.total)} (به‌روزرسانی خودکار)`;
+  $('#admin-list').innerHTML = assistLogHtml(r.assistant || []) + (r.cases.length ? r.cases.map(adminCard).join('') : '<div class="card muted">هنوز کسی فرمی ارسال نکرده است.</div>');
+  loadAdminThumbs();
+}
+function assistLogHtml(log) {
+  if (!log.length) return '';
+  return `<div class="card"><details><summary><b>پرسش‌های دستیار پزشکی (${fa(log.length)})</b></summary>${log.map(l => `<div style="margin:8px 0;border-top:1px solid var(--line);padding-top:6px"><div class="muted small">${esc(l.ts)}${l.mode === 'emergency' ? ' · ⚠ هشدار اورژانسی' : ''}</div><div><b>سؤال:</b> ${esc(l.q)}</div><div style="white-space:pre-wrap"><b>پاسخ:</b> ${esc(l.a)}</div></div>`).join('')}</details></div>`;
+}
+function adminCard(c) {
+  const p = c.patient, d = c.doctor || {};
+  const imgs = c.image_count ? `<div class="thumbs">${Array.from({ length: c.image_count }, (_, i) => {
+    const k = `a:${c.id}/${i}`; return `<div class="th"><img data-aimg="${k}" src="${blobCache[k] || ''}" alt="تصویر بیمار"></div>`; }).join('')}</div>` : '';
+  return `<div class="card"><div class="row"><b>${esc(p.name || 'بدون نام')}</b>
+    <span class="muted">${p.age} ساله${p.sex ? (p.sex === 'female' ? ' · زن' : ' · مرد') : ''}${p.pregnant ? ' · باردار' : ''}</span>
+    <span class="badge b-gray">${esc(d.name || '')} — ${esc(d.specialty || '')}</span><span class="sp"></span>${badge(c.status)}<span class="muted">${esc(c.created)}</span></div>
+    <p style="margin:6px 0"><b>شرح حال:</b> ${esc(c.symptoms)}</p>
+    ${c.appointment ? `<div class="muted">🗓 وقت ویزیت: <b>${esc(c.appointment.text)}</b></div>` : ''}
+    <div class="qa">${(c.answers_display || []).map(a => `<span><i>${esc(a.label)}:</i> ${esc(a.value)}</span>`).join('')}</div>
+    ${imgs}
+    <div class="muted" style="margin-top:6px">نتیجه‌ی ایجنت: ${esc(c.outcome ? c.outcome.reason : '')}${c.code ? ` · کد: <b dir="ltr">${esc(c.code)}</b>` : ''}</div>
+    ${(c.chat || []).length ? `<details><summary>گفتگو (${fa(c.chat.length)} پیام)</summary><div class="chatbox">${msgsHtml(c.chat, 'none')}</div></details>` : ''}</div>`;
+}
+async function loadAdminThumbs() {
+  for (const im of document.querySelectorAll('#admin-list img[data-aimg]')) {
+    const k = im.dataset.aimg;
+    if (!blobCache[k]) {
+      const [id, i] = k.slice(2).split('/');
+      try {
+        const r = await fetch(`/api/admin/cases/${id}/images/${i}`, { headers: aHeaders() });
+        if (!r.ok) continue; blobCache[k] = URL.createObjectURL(await r.blob());
+      } catch (e) { continue; }
+    }
+    im.src = blobCache[k]; im.onclick = () => lightbox(blobCache[k]);
+  }
+}
+setInterval(() => { if (currentTab === 'admin') loadAdmin(false); }, 5000);
+
+/* ================= دستیار پزشکی ================= */
+const AS_EX = ['پاراستامول چیست و عوارضش چیست؟', 'تفاوت سرماخوردگی و آنفلوانزا چیست؟', 'برای پیشگیری از پوسیدگی دندان چه کنم؟', 'قبل از آزمایش خون ناشتایی لازم است؟'];
+let asMsgs = [], asBusy = false;
+function asRender() {
+  $('#as-log').innerHTML = asMsgs.length ? asMsgs.map(m => `<div class="msg ${m.role === 'user' ? 'me' : 'them'}">${esc(m.content)}</div>`).join('') : '<div class="muted">سؤال خود را بنویسید یا یکی از نمونه‌ها را بزنید.</div>';
+  $('#as-log').scrollTop = $('#as-log').scrollHeight;
+}
+async function asSend(text) {
+  text = (text || $('#as-in').value).trim(); if (!text || asBusy) return;
+  asBusy = true; $('#as-err').textContent = ''; $('#as-in').value = '';
+  asMsgs.push({ role: 'user', content: text }); asRender();
+  $('#as-send').disabled = true; $('#as-send').textContent = '…';
+  try {
+    const r = await post('/api/assistant', { messages: asMsgs.slice(-10) });
+    asMsgs.push({ role: 'assistant', content: r.reply });
+  } catch (e) { $('#as-err').textContent = e.message; asMsgs.pop(); $('#as-in').value = text; }
+  asBusy = false; $('#as-send').disabled = false; $('#as-send').textContent = 'ارسال'; asRender();
+}
+$('#as-chips').innerHTML = AS_EX.map(q => `<button type="button">${esc(q)}</button>`).join('');
+$('#as-chips').querySelectorAll('button').forEach(b => b.onclick = () => asSend(b.textContent));
+$('#as-send').onclick = () => asSend();
+$('#as-in').onkeydown = e => { if (e.key === 'Enter') asSend(); };
+$('#as-clear').onclick = () => { asMsgs = []; $('#as-err').textContent = ''; asRender(); };
+asRender();
+
+/* ================= ساعت زنده (وقت ایران) ================= */
+function tickClock() {
+  try {
+    const f = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { timeZone: 'Asia/Tehran', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    const o = {}; f.formatToParts(new Date()).forEach(p => o[p.type] = p.value);
+    $('#clock').textContent = `🕒 ${o.weekday} ${o.day} ${o.month} ${o.year}، ساعت ${o.hour}:${o.minute} — به وقت ایران`;
+  } catch (e) { $('#clock').textContent = ''; }
+}
+tickClock(); setInterval(tickClock, 15000);
+
+function applyCfg(cfg) {
+  DOCTORS = cfg.doctors;
+  if (!cfg.demo_pins) $('#pin-hint').classList.add('hide');  // روی سرور عمومی رمزها نمایش داده نمی‌شوند
+  $('#as-off').classList.toggle('hide', !!cfg.assistant);
+}
+async function refreshDoctors() {  // وقت‌های خالی هر دقیقه به‌روز می‌شود (فقط روی صفحه‌ی اصلی)
+  if (currentTab !== 'patient' || !root().querySelector('.docgrid')) return;
+  try { applyCfg(await api('/api/doctors')); showHome(); } catch (e) {}
+}
+setInterval(refreshDoctors, 60000);
+
 /* ================= شروع ================= */
 (async function init() {
   try {
     const cfg = await api('/api/doctors');
-    DOCTORS = cfg.doctors;
-    if (!cfg.demo_pins) $('#pin-hint').classList.add('hide');  // روی سرور عمومی رمزها نمایش داده نمی‌شوند
+    applyCfg(cfg);
     $('#doc-sel').innerHTML = DOCTORS.map(d => `<option value="${d.id}">${esc(d.name)} — ${esc(d.specialty)}</option>`).join('');
     $('#doc-sel').value = sess.get('did') || DOCTORS[0].id;
     $('#pin').value = sess.get('pin');

@@ -16,3 +16,5 @@ services:
         sync: false
       - key: PIN_KARAMATI
         sync: false
+      - key: ADMIN_PIN
+        sync: false
