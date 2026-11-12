@@ -445,7 +445,7 @@ class Handler(BaseHTTPRequestHandler):
                          "لطفاً همین الان با اورژانس ۱۱۵ تماس بگیرید یا به نزدیک‌ترین مرکز درمانی مراجعه کنید. "
                          "این دستیار برای موارد اورژانسی مناسب نیست.")
             elif not agent.llm_available():
-                return self._json(503, {"error": "دستیار پزشکی فعلاً غیرفعال است (کلید ANTHROPIC_API_KEY روی سرور تنظیم نشده)"})
+                return self._json(503, {"error": "دستیار پزشکی فعلاً غیرفعال است (کلید API روی سرور تنظیم نشده)"})
             else:
                 try:
                     reply = agent.ask_assistant(clean)
@@ -676,7 +676,7 @@ if __name__ == "__main__":
     mode = "LLM" if os.environ.get("ANTHROPIC_API_KEY") and os.environ.get("AGENT_MODE") != "demo" else "demo"
     print(f"http://{host}:{port}   (حالت ایجنت: {mode})", flush=True)
     if DEMO_PINS:
-        print("رمزهای دمو: سهرابی 1111 | مرادی 2222 | موسوی 3333 | کرامتی 4444", flush=True)
+        print("رمزهای دمو: سهرابی 1111 | مرادی 2222 | عباس‌زاده 3333 | کرامتی 4444", flush=True)
         print("رمز مدیر (تب «مدیر»): 9999", flush=True)
     else:
         print("رمز پزشکان از متغیرهای محیطی خوانده شد.", flush=True)
