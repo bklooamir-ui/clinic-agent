@@ -4,15 +4,17 @@
 اجرا:  python3 server.py   →   http://127.0.0.1:8000
 """
 import base64
+import hashlib
 import json
 import os
 import re
 import secrets
 import threading
 import time
+from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from datetime import datetime, timedelta
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import agent
 import calendar_fa
@@ -51,6 +53,35 @@ for _d in DOCTORS.values():
 
 # رمز مدیر (دیدن همه‌ی پرونده‌ها). روی سرور عمومی باید با متغیر ADMIN_PIN تنظیم شود؛ وگرنه غیرفعال است.
 ADMIN_PIN = os.environ.get("ADMIN_PIN") or ("9999" if DEMO_PINS else None)
+
+# ---- قفل دسترسی (اختیاری): اگر OWNER_KEY تنظیم شود، سایت فقط با لینک مالک یا لینک مهمانِ موقت باز می‌شود
+OWNER_KEY = os.environ.get("OWNER_KEY", "").strip()
+GATE = bool(OWNER_KEY)
+GUESTS = {}  # توکن -> {"minutes", "created", "first", "sess"}
+GUEST_UNUSED_TTL = 3600  # لینکی که هرگز باز نشود بعد از ۱ ساعت باطل می‌شود
+MAX_LIVE_LINKS = 20
+
+
+def _now():
+    return time.time()
+
+
+def _owner_cookie():
+    return hashlib.sha256(("owner:" + OWNER_KEY).encode()).hexdigest()[:40]
+
+
+def _guest_state(tok):
+    """وضعیت لینک مهمان: unused / active / expired / unknown و ثانیه‌ی باقی‌مانده."""
+    g = GUESTS.get(tok)
+    if not g:
+        return "unknown", 0
+    t = _now()
+    if g["first"] is None:
+        left = g["created"] + GUEST_UNUSED_TTL - t
+        return ("unused", int(left)) if left > 0 else ("expired", 0)
+    left = g["first"] + g["minutes"] * 60 - t
+    return ("active", int(left)) if left > 0 else ("expired", 0)
+
 
 _HITS = {}  # (نام سطل, ip) -> زمان رخدادها
 
@@ -236,6 +267,21 @@ def _book(c, after=None):
     return c["appointment"]
 
 
+GUEST_PAGE = """<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ورود مهمان</title><body style="font-family:Tahoma,sans-serif;background:#f3f6f7;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0">
+<div style="background:#fff;border-radius:14px;padding:28px;max-width:440px;text-align:center;box-shadow:0 2px 12px #0001">
+<h2 style="margin-top:0">کلینیک هوشمند (نسخه‌ی آزمایشی)</h2>
+<p>دسترسی شما <b>__MIN__ دقیقه</b> است و با زدن دکمه‌ی زیر شروع می‌شود. بعد از پایان، سایت برای شما بسته می‌شود.</p>
+<button id="b" style="font:inherit;padding:10px 26px;border:0;border-radius:10px;background:#12343b;color:#fff;cursor:pointer;font-size:16px">شروع و ورود به سایت</button>
+<p id="e" style="color:#b91c1c"></p></div>
+<script>document.getElementById('b').onclick=async()=>{try{const r=await fetch('/api/guest/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:'__TOK__'})});if(r.ok){location.replace('/')}else{const j=await r.json().catch(()=>({}));document.getElementById('e').textContent=j.error||'این لینک معتبر نیست'}}catch(x){document.getElementById('e').textContent='خطا در ارتباط'}}</script></body></html>"""
+
+GATE_PAGE = """<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>دسترسی ندارید</title><body style="font-family:Tahoma,sans-serif;background:#f3f6f7;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0">
+<div style="background:#fff;border-radius:14px;padding:28px;max-width:420px;text-align:center;box-shadow:0 2px 12px #0001">
+<h2 style="margin-top:0">دسترسی ندارید</h2><p>این لینک منقضی شده یا معتبر نیست. برای ورود، از صاحب سایت لینک تازه بگیرید.</p></div></body></html>"""
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
@@ -294,10 +340,105 @@ class Handler(BaseHTTPRequestHandler):
             _hit("authfail", ip, 600)
         return False
 
+    # ---------- قفل دسترسی
+    def _access(self):
+        """'owner' یا 'guest' یا None (طبق کوکی)."""
+        if not GATE:
+            return "owner"
+        try:
+            c = SimpleCookie(self.headers.get("Cookie", ""))
+            v = c["acc"].value if "acc" in c else ""
+        except Exception:
+            return None
+        if v and secrets.compare_digest(v.encode(), _owner_cookie().encode()):
+            return "owner"
+        parts = v.split(".")
+        if len(parts) == 3 and parts[0] == "g":
+            g = GUESTS.get(parts[1])
+            if g and g.get("sess") and secrets.compare_digest(parts[2].encode(), g["sess"].encode()) \
+                    and _guest_state(parts[1])[0] == "active":
+                return "guest"
+        return None
+
+    def _set_cookie_redirect(self, value, max_age):
+        self.send_response(302)
+        secure = "; Secure" if self.headers.get("X-Forwarded-Proto") == "https" else ""
+        self.send_header("Set-Cookie", f"acc={value}; Path=/; Max-Age={max_age}; HttpOnly; SameSite=Lax{secure}")
+        self.send_header("Location", "/")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def _try_link(self, qs):
+        """?k=کلید مالک یا ?g=لینک مهمان را می‌پذیرد. True یعنی پاسخ (ریدایرکت) فرستاده شد."""
+        k = (qs.get("k") or [""])[0]
+        if k:
+            if secrets.compare_digest(k.encode("utf-8", "ignore"), OWNER_KEY.encode()):
+                self._set_cookie_redirect(_owner_cookie(), 30 * 86400)
+                return True
+            _hit("authfail", self._ip(), 600)
+            return False
+        tok = (qs.get("g") or [""])[0]
+        if tok:
+            with LOCK:
+                g = GUESTS.get(tok)
+                st, left = _guest_state(tok)
+                if g and st == "unused":
+                    # فقط صفحه‌ی «شروع» نشان داده می‌شود؛ شمارش با زدن دکمه شروع می‌شود (پیش‌نمایش پیام‌رسان‌ها شمارش را نمی‌سوزاند)
+                    page = GUEST_PAGE.replace("__TOK__", tok).replace("__MIN__", str(g["minutes"]))
+                    self._raw(200, "text/html; charset=utf-8", page.encode("utf-8"))
+                    return True
+                mine = False
+                if g and st == "active" and g.get("sess"):
+                    try:
+                        c = SimpleCookie(self.headers.get("Cookie", ""))
+                        mine = ("acc" in c and c["acc"].value == f"g.{tok}.{g['sess']}")
+                    except Exception:
+                        mine = False
+                if g and st == "active" and mine:
+                    self._set_cookie_redirect(f"g.{tok}.{g['sess']}", max(left, 1))
+                    return True
+            _hit("authfail", self._ip(), 600)
+        return False
+
+    def _guest_start(self):
+        data = self._body() or {}
+        tok = str(data.get("token", ""))
+        with LOCK:
+            g = GUESTS.get(tok)
+            if not g or _guest_state(tok)[0] != "unused":
+                _hit("authfail", self._ip(), 600)
+                return self._json(403, {"error": "این لینک معتبر نیست یا قبلاً استفاده شده است"})
+            g["first"], g["sess"] = _now(), secrets.token_hex(8)
+            left = _guest_state(tok)[1]
+            val = f"g.{tok}.{g['sess']}"
+        body = b'{"ok":true}'
+        self.send_response(200)
+        secure = "; Secure" if self.headers.get("X-Forwarded-Proto") == "https" else ""
+        self.send_header("Set-Cookie", f"acc={val}; Path=/; Max-Age={max(left, 1)}; HttpOnly; SameSite=Lax{secure}")
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _deny(self, path, api_gate_ok=False):
+        if path == "/api/doctors" and api_gate_ok:  # سلامت‌سنجی Render همچنان ۲۰۰ می‌گیرد
+            return self._json(200, {"gated": True})
+        if path.startswith("/api/"):
+            return self._json(403, {"error": "این لینک منقضی شده یا دسترسی ندارید", "code": "access"})
+        return self._raw(403, "text/html; charset=utf-8", GATE_PAGE.encode("utf-8"))
+
     # ---------- GET
     def do_GET(self):
-        path = urlparse(self.path).path
+        parsed = urlparse(self.path)
+        path = parsed.path
         lite = "lite=1" in self.path
+        if GATE:
+            if path in ("/", "/index.html") and parsed.query and self._try_link(parse_qs(parsed.query)):
+                return
+            if not self._access():
+                return self._deny(path, api_gate_ok=True)
 
         if path in ("/", "/index.html"):
             with open(os.path.join(BASE, "index.html"), "rb") as f:
@@ -324,6 +465,17 @@ class Handler(BaseHTTPRequestHandler):
                                     "assistant": agent.llm_available(), "now": calendar_fa.stamp()})
 
         # ---------- پنل مدیر: همه‌ی پرونده‌ها
+        if path == "/api/admin/links":
+            if not self._admin():
+                return self._json(401, {"error": "رمز مدیر نادرست است یا تنظیم نشده"})
+            with LOCK:
+                out = []
+                for tok, g in sorted(GUESTS.items(), key=lambda kv: -kv[1]["created"]):
+                    st, left = _guest_state(tok)
+                    out.append({"state": st, "left": left, "minutes": g["minutes"],
+                                "path": f"/?g={tok}" if st in ("unused", "active") else ""})
+            return self._json(200, {"gate": GATE, "links": out[:30]})
+
         if path == "/api/admin/cases":
             if not self._admin():
                 return self._json(401, {"error": "رمز مدیر نادرست است یا تنظیم نشده"})
@@ -418,9 +570,34 @@ class Handler(BaseHTTPRequestHandler):
     # ---------- POST
     def do_POST(self):
         path = urlparse(self.path).path
+        if GATE and path == "/api/guest/start":  # تنها مسیر POST که بدون دسترسی باز است
+            return self._guest_start()
+        if GATE and not self._access():
+            return self._deny(path)
         data = self._body()
         if data is None:
             return self._json(413, {"error": "حجم درخواست زیاد است؛ تصویرها را کوچک‌تر کنید"})
+
+        # ---------- ساخت لینک مهمانِ موقت (فقط مدیر؛ فقط وقتی OWNER_KEY تنظیم باشد)
+        if path == "/api/admin/links":
+            if not self._admin():
+                return self._json(401, {"error": "رمز مدیر نادرست است یا تنظیم نشده"})
+            if not GATE:
+                return self._json(409, {"error": "برای این قابلیت باید متغیر OWNER_KEY روی سرور تنظیم شود"})
+            try:
+                minutes = int(data.get("minutes", 5))
+            except (TypeError, ValueError):
+                minutes = 5
+            minutes = max(1, min(minutes, 60))
+            with LOCK:
+                live = [t for t in GUESTS if _guest_state(t)[0] in ("unused", "active")]
+                for t in [t for t in GUESTS if _guest_state(t)[0] == "expired"][:-10]:
+                    del GUESTS[t]  # فقط ۱۰ لینک منقضی آخر نگه داشته می‌شود
+                if len(live) >= MAX_LIVE_LINKS:
+                    return self._json(409, {"error": "تعداد لینک‌های فعال زیاد است"})
+                tok = secrets.token_urlsafe(12)
+                GUESTS[tok] = {"minutes": minutes, "created": _now(), "first": None, "sess": None}
+            return self._json(200, {"path": f"/?g={tok}", "minutes": minutes})
 
         # ---------- دستیار پزشکی (پرسش و پاسخ آزاد؛ نیازمند کلید API)
         if path == "/api/assistant":
@@ -522,8 +699,10 @@ class Handler(BaseHTTPRequestHandler):
                 "images": saved, "chat": [],
             }
             with LOCK:
-                if case["status"] == "referred":  # ارجاع حضوری → نزدیک‌ترین وقت واقعی پزشک
+                if case["status"] in ("referred", "emergency"):  # ارجاع حضوری / اورژانس → نزدیک‌ترین وقت واقعی پزشک
                     _book(case)
+                    if case["appointment"] and case["status"] == "emergency":
+                        case["appointment"]["followup"] = True  # وقت پیگیری؛ جایگزین اقدام اورژانسی نیست
                 CASES[cid] = case
                 _save()
             notify.notify_case(case, doc["name"])
@@ -596,7 +775,7 @@ class Handler(BaseHTTPRequestHandler):
                 c = CASES.get(m.group(1))
                 if not c:
                     return self._json(404, {"error": "یافت نشد"})
-                if not c.get("appointment") or c["status"] in ("emergency", "rejected", "dispensed"):
+                if not c.get("appointment") or c["status"] in ("rejected", "dispensed"):
                     return self._json(409, {"error": "برای این پرونده وقتی قابل جابه‌جایی نیست"})
                 if c.get("resched", 0) >= 3:
                     return self._json(429, {"error": "حداکثر ۳ بار می‌توانید وقت را جابه‌جا کنید"})
@@ -605,7 +784,10 @@ class Handler(BaseHTTPRequestHandler):
                 slot = calendar_fa.next_slot(d["schedule"], _taken(d["id"], c["id"]), after=cur + timedelta(minutes=1))
                 if not slot:
                     return self._json(409, {"error": "وقت خالی دیگری در ۳ هفته‌ی آینده نیست"})
+                fu = c["appointment"].get("followup")
                 c["appointment"] = calendar_fa.describe(slot, d["schedule"])
+                if fu:
+                    c["appointment"]["followup"] = True
                 c["resched"] = c.get("resched", 0) + 1
                 _save()
                 return self._json(200, public_case(c, include_trace=False))
