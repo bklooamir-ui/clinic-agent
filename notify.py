@@ -25,6 +25,8 @@ def format_case(case, doctor_name):
              f"وضعیت: {STATUS_FA.get(case['status'], case['status'])}"]
     if case.get("appointment"):
         lines.append(f"وقت ویزیت: {case['appointment']['text']}")
+    if case.get("payment"):
+        lines.append(f"پرداخت آزمایشی: {case['payment']['amount']:,} تومان، کد {case['payment']['ref']}")
     lines.append(f"شرح حال: {case['symptoms']}")
     for a in case.get("answers_display", [])[:25]:
         lines.append(f"• {a['label']}: {a['value']}")
