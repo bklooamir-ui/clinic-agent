@@ -57,6 +57,9 @@ ADMIN_PIN = os.environ.get("ADMIN_PIN") or ("9999" if DEMO_PINS else None)
 # ---- قفل دسترسی (اختیاری): اگر OWNER_KEY تنظیم شود، سایت فقط با لینک مالک یا لینک مهمانِ موقت باز می‌شود
 OWNER_KEY = os.environ.get("OWNER_KEY", "").strip()
 GATE = bool(OWNER_KEY)
+REQUIRE_PAYMENT = os.environ.get("PAYMENT_REQUIRED", "1") != "0"  # پرداخت آزمایشی قبل از ویزیت
+PAYMENTS = {}  # کد رهگیری -> {"doctor_id","amount","created","verified","used"}
+PAY_TTL = 3600
 GUESTS = {}  # توکن -> {"minutes", "created", "first", "sess"}
 GUEST_UNUSED_TTL = 3600  # لینکی که هرگز باز نشود بعد از ۱ ساعت باطل می‌شود
 MAX_LIVE_LINKS = 20
@@ -64,6 +67,27 @@ MAX_LIVE_LINKS = 20
 
 def _now():
     return time.time()
+
+
+_FA2EN = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+
+def _norm_ref(x):
+    """«pay-123456» یا «۱۲۳۴۵۶» (با ارقام فارسی) → «PAY-123456»."""
+    t = str(x or "").translate(_FA2EN).strip().upper().replace(" ", "")
+    if t.startswith("PAY-"):
+        t = t[4:]
+    return "PAY-" + t if t.isdigit() and len(t) == 6 else ""
+
+
+def _pay_ok(ref, doctor_id, need_verified=True):
+    """پرداخت معتبر (برای همین پزشک، منقضی‌نشده، مصرف‌نشده). باید داخل LOCK صدا زده شود یا فقط خواندنی باشد."""
+    p = PAYMENTS.get(ref)
+    if not p or p["doctor_id"] != doctor_id or p["used"] or _now() - p["created"] > PAY_TTL:
+        return None
+    if need_verified and not p["verified"]:
+        return None
+    return p
 
 
 def _owner_cookie():
@@ -239,7 +263,7 @@ def public_doctor(d):
 
 def public_case(c, include_trace=True):
     """نمای قابل‌نمایش به بیمار (کد فقط بعد از تأیید یا پذیرش پزشک)."""
-    out = {k: c.get(k) for k in ("id", "status", "outcome", "message", "mode", "created", "doctor_note", "routing", "code_type", "appointment")}
+    out = {k: c.get(k) for k in ("id", "status", "outcome", "message", "mode", "created", "doctor_note", "routing", "code_type", "appointment", "payment")}
     d = DOCTORS.get(c.get("doctor_id"))
     out["doctor"] = ({"id": d["id"], "name": d["name"], "specialty": d["specialty"], "color": d["color"],
                       "soft": d["soft"], "style": d["style"]} if d else None)
@@ -636,6 +660,41 @@ class Handler(BaseHTTPRequestHandler):
                 _save_assist()
             return self._json(200, {"reply": reply, "mode": mode})
 
+        # ---------- پرداخت آزمایشی (شبیه‌سازی؛ هیچ پول یا کارتی در کار نیست)
+        if path == "/api/payments":
+            doc = DOCTORS.get(str(data.get("doctor_id", "")))
+            if not doc:
+                return self._json(400, {"error": "پزشک نامعتبر است"})
+            if _hit("pay", self._ip(), 3600) > 30:
+                return self._json(429, {"error": "تعداد درخواست‌ها زیاد است؛ کمی بعد دوباره تلاش کنید"})
+            with LOCK:
+                t = _now()
+                for k in [k for k, v in PAYMENTS.items() if t - v["created"] > PAY_TTL or v["used"]][:500]:
+                    del PAYMENTS[k]
+                if len(PAYMENTS) >= 2000:
+                    return self._json(503, {"error": "ظرفیت نسخه‌ی آزمایشی پر شده است"})
+                while True:
+                    ref = "PAY-%06d" % secrets.randbelow(1000000)
+                    if ref not in PAYMENTS:
+                        break
+                PAYMENTS[ref] = {"doctor_id": doc["id"], "amount": int(doc["fee"]), "created": t, "verified": False, "used": False}
+            return self._json(200, {"ref": ref, "amount": int(doc["fee"]), "doctor": doc["name"]})
+
+        if path == "/api/payments/verify":
+            ip = self._ip()
+            if _count("payfail", ip, 600) >= 15:
+                return self._json(429, {"error": "تلاش‌های ناموفق زیاد بود؛ چند دقیقه بعد دوباره امتحان کنید"})
+            doc = DOCTORS.get(str(data.get("doctor_id", "")))
+            ref = _norm_ref(data.get("ref"))
+            with LOCK:
+                p = _pay_ok(ref, doc["id"], need_verified=False) if doc and ref else None
+                if p:
+                    p["verified"] = True
+            if not p:
+                _hit("payfail", ip, 600)
+                return self._json(400, {"error": "کد رهگیری نامعتبر یا منقضی است؛ دوباره پرداخت آزمایشی را بزنید"})
+            return self._json(200, {"ok": True, "amount": p["amount"]})
+
         # ---------- ثبت بیمار
         if path == "/api/intake":
             if _hit("intake", self._ip(), 3600) > RATE_INTAKE:
@@ -645,6 +704,12 @@ class Handler(BaseHTTPRequestHandler):
             doc = DOCTORS.get(str(data.get("doctor_id", "")))
             if not doc:
                 return self._json(400, {"error": "پزشک نامعتبر است"})
+            pay_ref = _norm_ref(data.get("payment_ref"))
+            if REQUIRE_PAYMENT:
+                with LOCK:
+                    ok = _pay_ok(pay_ref, doc["id"]) if pay_ref else None
+                if not ok:
+                    return self._json(402, {"error": "ابتدا هزینه‌ی ویزیت را بپردازید و کد رهگیری را تأیید کنید", "code": "payment"})
             answers_in = data.get("answers") if isinstance(data.get("answers"), dict) else {}
             fields = doc["form"]["fields"]
             vals, display, extra = {}, [], []
@@ -699,6 +764,12 @@ class Handler(BaseHTTPRequestHandler):
                 "images": saved, "chat": [],
             }
             with LOCK:
+                if REQUIRE_PAYMENT:
+                    p = _pay_ok(pay_ref, doc["id"])
+                    if not p:  # همزمان توسط درخواست دیگری مصرف شد
+                        return self._json(402, {"error": "این کد رهگیری قبلاً استفاده شده است", "code": "payment"})
+                    p["used"] = True
+                    case["payment"] = {"ref": pay_ref, "amount": p["amount"]}
                 if case["status"] in ("referred", "emergency"):  # ارجاع حضوری / اورژانس → نزدیک‌ترین وقت واقعی پزشک
                     _book(case)
                     if case["appointment"] and case["status"] == "emergency":
