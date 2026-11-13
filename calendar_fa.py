@@ -78,8 +78,9 @@ def slots_for_day(schedule, day):
     return out
 
 
-def next_slot(schedule, taken, now_dt=None, lead_min=30, after=None, horizon_days=21):
-    """اولین نوبت آزاد: حداقل lead_min دقیقه بعد از «الان»، و (اگر داده شد) بعد از after."""
+def next_slot(schedule, taken, now_dt=None, lead_min=30, after=None, horizon_days=21, busy=None):
+    """اولین نوبت آزاد: حداقل lead_min دقیقه بعد از «الان»، و (اگر داده شد) بعد از after.
+    busy: تابع اختیاری که برای نوبت‌های «پرشده‌ی فرضی» True برمی‌گرداند."""
     now_dt = (now_dt or now()).astimezone(IRAN)
     earliest = now_dt + timedelta(minutes=lead_min)
     if after and after > earliest:
@@ -87,7 +88,7 @@ def next_slot(schedule, taken, now_dt=None, lead_min=30, after=None, horizon_day
     for i in range(horizon_days + 1):
         day = (now_dt + timedelta(days=i)).date()
         for s in slots_for_day(schedule, day):
-            if s >= earliest and s.isoformat() not in taken:
+            if s >= earliest and s.isoformat() not in taken and not (busy and busy(s)):
                 return s
     return None
 
