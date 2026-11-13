@@ -277,6 +277,28 @@ def public_case(c, include_trace=True):
     return out
 
 
+SIM_BUSY = os.environ.get("SIM_BUSY", "1") != "0"  # نوبت‌های پرشده‌ی فرضی تا وقت خالی واقع‌گرایانه باشد
+
+
+def _busy_fn(d):
+    """تابع قطعی (بدون تصادف): بخشی از نوبت‌های هر پزشک را «پر» نشان می‌دهد (نرخ schedule.busy)."""
+    rate = d["schedule"].get("busy", 0) if SIM_BUSY else 0
+    if not rate:
+        return None
+    sch = d["schedule"]
+    (sh, sm), (eh, em) = (int(x) for x in sch["start"].split(":")), (int(x) for x in sch["end"].split(":"))
+    start, end = sh * 60 + sm, eh * 60 + em
+
+    def busy(s):
+        m = s.hour * 60 + s.minute
+        if m - start < sch["slot"]:  # اولین نوبت هر روز همیشه پر است
+            return True
+        pos = (m - start) / (end - start)  # نوبت‌های اول روز شلوغ‌ترند، آخر روز خلوت‌تر
+        prob = min(0.97, rate * (0.6 + 0.9 * (1 - pos) ** 2))
+        return int(hashlib.sha256(f"{d['id']}|{s.isoformat()}".encode()).hexdigest()[:8], 16) / 0xFFFFFFFF < prob
+    return busy
+
+
 def _taken(doctor_id, exclude=None):
     """نوبت‌های رزروشده‌ی یک پزشک (باید داخل LOCK صدا زده شود)."""
     return {c["appointment"]["iso"] for c in CASES.values()
@@ -286,7 +308,7 @@ def _taken(doctor_id, exclude=None):
 def _book(c, after=None):
     """اولین وقت آزاد پزشک را (بر اساس ساعت واقعی ایران) برای این پرونده رزرو می‌کند. داخل LOCK صدا زده شود."""
     d = DOCTORS[c["doctor_id"]]
-    slot = calendar_fa.next_slot(d["schedule"], _taken(d["id"], c["id"]), after=after)
+    slot = calendar_fa.next_slot(d["schedule"], _taken(d["id"], c["id"]), after=after, busy=_busy_fn(d))
     c["appointment"] = calendar_fa.describe(slot, d["schedule"]) if slot else None
     return c["appointment"]
 
@@ -482,7 +504,7 @@ class Handler(BaseHTTPRequestHandler):
                 docs = []
                 for d in tools.DOCTORS:
                     pd = public_doctor(d)
-                    s = calendar_fa.next_slot(d["schedule"], _taken(d["id"]))
+                    s = calendar_fa.next_slot(d["schedule"], _taken(d["id"]), busy=_busy_fn(d))
                     pd["next_slot"] = calendar_fa.describe(s, d["schedule"])["text"] if s else None
                     docs.append(pd)
             return self._json(200, {"doctors": docs, "demo_pins": DEMO_PINS,
@@ -852,7 +874,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(429, {"error": "حداکثر ۳ بار می‌توانید وقت را جابه‌جا کنید"})
                 d = DOCTORS[c["doctor_id"]]
                 cur = datetime.fromisoformat(c["appointment"]["iso"])
-                slot = calendar_fa.next_slot(d["schedule"], _taken(d["id"], c["id"]), after=cur + timedelta(minutes=1))
+                slot = calendar_fa.next_slot(d["schedule"], _taken(d["id"], c["id"]), after=cur + timedelta(minutes=1), busy=_busy_fn(d))
                 if not slot:
                     return self._json(409, {"error": "وقت خالی دیگری در ۳ هفته‌ی آینده نیست"})
                 fu = c["appointment"].get("followup")
