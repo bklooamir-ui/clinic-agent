@@ -223,6 +223,8 @@ def create_draft_prescription(ctx, drug_ids, rationale=""):
     """
     if _doctor(ctx)["kind"] != "gp":
         return {"error": "تجویز دارو از طریق این ایجنت فقط برای پزشک عمومی مجاز است؛ برای این پزشک فقط خلاصه یا برنامه ساخته می‌شود."}
+    if "red_flag" not in ctx:  # گارد: اگر مدل غربالگری اورژانسی را رد کرده بود، خود ابزار اسکن می‌کند
+        check_red_flags(ctx)
     if ctx.get("red_flag"):
         return {"error": "علائم خطر شناسایی شده است؛ ساخت نسخه ممنوع است. بیمار باید فوراً ارجاع شود."}
     if ctx.get("risk_reasons") is None:
