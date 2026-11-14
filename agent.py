@@ -217,6 +217,10 @@ def run_agent(ctx):
     ctx.setdefault("answers", {})
     ctx.setdefault("answers_display", [])
     ctx["mode"] = "demo"
+    # گارد قطعی (مستقل از مدل): اگر علائم خطر هست، مدل اصلاً صدا زده نمی‌شود و مسیر اورژانس قطعی اجرا می‌شود
+    if tools.check_red_flags(ctx)["flagged"]:
+        want_llm = False
+    ctx.pop("red_flag", None); ctx.pop("flags", None)
     if want_llm:
         try:
             ctx["mode"] = "llm"
