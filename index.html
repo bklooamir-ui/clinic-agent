@@ -148,6 +148,9 @@
     border-radius:50%; animation:r .8s linear infinite; vertical-align:-2px; margin-left:6px; }
   @keyframes r { to { transform:rotate(360deg); } }
   #clock { margin-top:6px; font-size:13px; opacity:.92; }
+  .hist { background:#eef6ff; border:1px solid #bcd7f5; border-radius:10px; padding:8px 12px; margin:8px 0; }
+  .hist summary { cursor:pointer; color:#1d4f91; margin-top:4px; }
+  .hrow { padding:6px 0; border-top:1px dashed var(--line); }
   .payrow { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px dashed var(--line); }
   .appt { background:#fff; border:1px dashed currentColor; border-radius:10px; padding:8px 12px; margin:8px 0; font-weight:700; }
   .nextslot { font-size:12.5px; color:var(--accent); margin:4px 0; font-weight:700; }
@@ -159,6 +162,25 @@
   .chips button { border:1px solid var(--line); background:#fff; border-radius:999px; padding:5px 11px; cursor:pointer; font:inherit; font-size:13px; }
   .disclaimer { font-size:12.5px; color:var(--muted); text-align:center; margin-top:14px; }
   @media (max-width:640px) { .hero-art { display:none; } .hero h2 { font-size:18px; } }
+
+  /* ---------- ظاهر داشبوردی (سایدبار تیره + بنر) ---------- */
+  :root { --bg:#f4f7fa; --accent:#0f8f84; --soft:#e3f5f2; --navy:#12233b; --line:#e2e8ef; }
+  body { font-family: Vazirmatn, Tahoma, "Segoe UI", system-ui, sans-serif; }
+  header { background:linear-gradient(110deg,#14263f,#2b536c); padding:22px 28px; }
+  header h1 { font-size:20px; }
+  header p { color:#d0dbe6; opacity:1; }
+  .card { border-radius:14px; box-shadow:0 1px 2px rgba(18,35,59,.04); }
+  .tab { border-radius:9px; }
+  .tab.on { background:var(--accent); border-color:var(--accent); }
+  @media (min-width:900px) {
+    main { max-width:1240px; display:grid; grid-template-columns:220px minmax(0,1fr); gap:0 28px; align-items:start; padding:24px 28px 70px; }
+    main > * { grid-column:2; min-width:0; }
+    main > .tabs { grid-column:1; grid-row:1 / span 30; position:sticky; top:16px; flex-direction:column; gap:6px;
+      background:var(--navy); padding:18px 12px; border-radius:16px; margin:0; }
+    .tab { text-align:right; background:transparent; border-color:transparent; color:#b8c6d6; padding:12px 16px; flex:none; }
+    .tab:hover { background:#263c58; color:#fff; }
+    .tab.on { background:#263c58; color:#fff; box-shadow:inset -3px 0 0 #19aa9d; }
+  }
 </style>
 </head>
 <body>
@@ -400,8 +422,8 @@ function fieldHtml(f) {
   if (f.type === 'select') input = `<select id="${id}" data-fid="${f.id}"><option value="">—</option>${f.options.map(opt).map(o => `<option value="${esc(o.v)}">${esc(o.l)}</option>`).join('')}</select>`;
   else if (f.type === 'textarea') input = `<textarea id="${id}" data-fid="${f.id}" placeholder="${esc(f.placeholder || '')}"></textarea>`;
   else if (f.type === 'scale') input = `<div class="scale" id="${id}" data-fid="${f.id}">${[1,2,3,4,5,6,7,8,9,10].map(n => `<button type="button" data-v="${n}">${n}</button>`).join('')}</div>`;
-  else input = `<input id="${id}" data-fid="${f.id}" type="${f.type || 'text'}" ${f.min != null ? `min="${f.min}"` : ''} ${f.max != null ? `max="${f.max}"` : ''} ${f.step ? `step="${f.step}"` : ''} placeholder="${esc(f.placeholder || '')}">`;
-  return `<div class="${f.full || f.type === 'textarea' ? 'full' : ''}" data-wrap="${f.id}"><label>${esc(f.label)}${f.required ? ' <span class="req">*</span>' : ''}</label>${input}</div>`;
+  else input = `<input id="${id}" data-fid="${f.id}" type="${f.type || 'text'}" ${f.min != null ? `min="${f.min}"` : ''} ${f.max != null ? `max="${f.max}"` : ''} ${f.step ? `step="${f.step}"` : ''} placeholder="${esc(f.placeholder || '')}" ${f.maxlength ? `maxlength="${f.maxlength}"` : ''} ${f.inputmode ? `inputmode="${f.inputmode}" autocomplete="off"` : ''}>`;
+  return `<div class="${f.full || f.type === 'textarea' ? 'full' : ''}" data-wrap="${f.id}"><label>${esc(f.label)}${f.required ? ' <span class="req">*</span>' : ''}</label>${input}${f.hint ? `<div class="small muted">${esc(f.hint)}</div>` : ''}</div>`;
 }
 function uploadHtml(u) {
   if (!u) return '';
@@ -461,11 +483,12 @@ function lightbox(src) {
   l.onclick = () => l.remove(); document.body.appendChild(l);
 }
 
+let PAYREQ = true;
 const PAID = {};  // پزشک -> کد رهگیری تأییدشده (فقط در همین صفحه؛ با رفرش باید دوباره پرداخت شود)
 const toman = n => Number(n).toLocaleString('fa-IR') + ' تومان';
 function showPay(id) {
   const d = docById(id); stopPoll(); window.scrollTo(0, 0);
-  if (PAID[id]) return showForm(id);
+  if (!PAYREQ || PAID[id]) return showForm(id);
   root().innerHTML = `<div class="themed st-${d.style}" ${themeAttr(d)}>
     <button class="btn ghost back" id="back">← بازگشت به پروفایل</button>
     ${heroHtml(d, true)}
@@ -507,7 +530,7 @@ function showForm(id) {
   root().innerHTML = `<div class="themed st-${d.style}" ${themeAttr(d)}>
     <button class="btn ghost back" id="back">← بازگشت به پروفایل</button>
     ${heroHtml(d, true)}
-    <div class="banner b-green" style="margin-bottom:10px">✅ هزینه‌ی ویزیت پرداخت شد (آزمایشی) — کد رهگیری: <b dir="ltr">${esc(PAID[id] || '')}</b></div>
+    ${PAID[id] ? `<div class="banner b-green" style="margin-bottom:10px">✅ هزینه‌ی ویزیت پرداخت شد (آزمایشی) — کد رهگیری: <b dir="ltr">${esc(PAID[id])}</b></div>` : ''}
     <div class="card formcard"><h3>${esc(f.title)}</h3><p class="muted">${esc(f.intro)}</p>
       ${f.samples && f.samples.length ? `<div class="muted" style="margin-bottom:8px">نمونه‌های سریع برای دمو: ${f.samples.map((s, i) => `<span class="chip" data-s="${i}">${esc(s.label)}</span>`).join('')}</div>` : ''}
       <form id="visit" class="grid">${f.fields.map(fieldHtml).join('')}${uploadHtml(f.upload)}
@@ -744,6 +767,7 @@ function caseCard(doc, c) {
     <p style="margin:6px 0"><b>شرح حال:</b> ${esc(c.symptoms)}</p>
     ${c.appointment ? `<div class="muted">🗓 وقت ویزیت: <b>${esc(c.appointment.text)}</b></div>` : ''}
     ${c.payment ? `<div class="muted">💳 پرداخت آزمایشی: <b>${toman(c.payment.amount)}</b> · کد <span dir="ltr">${esc(c.payment.ref)}</span></div>` : ''}
+    ${historyHtml(c)}
     <div class="qa">${(c.answers_display || []).map(a => `<span><i>${esc(a.label)}:</i> ${esc(a.value)}</span>`).join('')}</div>
     ${thumbsHtml(c)}
     <div style="margin-top:8px">${body}</div>${traceHtml(c)}</div>`;
@@ -836,6 +860,13 @@ function assistLogHtml(log) {
   if (!log.length) return '';
   return `<div class="card"><details><summary><b>پرسش‌های دستیار پزشکی (${fa(log.length)})</b></summary>${log.map(l => `<div style="margin:8px 0;border-top:1px solid var(--line);padding-top:6px"><div class="muted small">${esc(l.ts)}${l.mode === 'emergency' ? ' · ⚠ هشدار اورژانسی' : ''}</div><div><b>سؤال:</b> ${esc(l.q)}</div><div style="white-space:pre-wrap"><b>پاسخ:</b> ${esc(l.a)}</div></div>`).join('')}</details></div>`;
 }
+function historyHtml(c) {
+  if (!c.national) return '';
+  const h = c.history, head = `🪪 کد ملی: <span dir="ltr">${esc(c.national)}</span>`;
+  if (!h || !h.count) return `<div class="hist"><div>${head}</div><div class="muted">سابقه‌ای در سامانه ندارد (پرونده‌ی اول).</div></div>`;
+  return `<div class="hist"><div>${head}</div><div><b>📁 دارای سابقه:</b> اولین پرونده ${esc(h.first.date)} (${esc(h.first.ago)}) · ${fa(h.count)} مراجعه‌ی قبلی</div>
+    <details><summary>مشاهده‌ی سوابق</summary>${h.items.map(i => `<div class="hrow"><b>${esc(i.date)}</b> (${esc(i.ago)}) — ${esc(i.doctor)}، ${esc(i.specialty)}<br><span class="muted">${esc(i.summary)} · ${esc(i.status)}</span></div>`).join('')}</details></div>`;
+}
 function adminCard(c) {
   const p = c.patient, d = c.doctor || {};
   const imgs = c.image_count ? `<div class="thumbs">${Array.from({ length: c.image_count }, (_, i) => {
@@ -846,6 +877,7 @@ function adminCard(c) {
     <p style="margin:6px 0"><b>شرح حال:</b> ${esc(c.symptoms)}</p>
     ${c.appointment ? `<div class="muted">🗓 وقت ویزیت: <b>${esc(c.appointment.text)}</b></div>` : ''}
     ${c.payment ? `<div class="muted">💳 پرداخت آزمایشی: <b>${toman(c.payment.amount)}</b> · کد <span dir="ltr">${esc(c.payment.ref)}</span></div>` : ''}
+    ${historyHtml(c)}
     <div class="qa">${(c.answers_display || []).map(a => `<span><i>${esc(a.label)}:</i> ${esc(a.value)}</span>`).join('')}</div>
     ${imgs}
     <div class="muted" style="margin-top:6px">نتیجه‌ی ایجنت: ${esc(c.outcome ? c.outcome.reason : '')}${c.code ? ` · کد: <b dir="ltr">${esc(c.code)}</b>` : ''}</div>
@@ -902,7 +934,7 @@ function tickClock() {
 tickClock(); setInterval(tickClock, 15000);
 
 function applyCfg(cfg) {
-  DOCTORS = cfg.doctors;
+  DOCTORS = cfg.doctors; PAYREQ = cfg.payment !== false;
   if (!cfg.demo_pins) $('#pin-hint').classList.add('hide');  // روی سرور عمومی رمزها نمایش داده نمی‌شوند
   $('#as-off').classList.toggle('hide', !!cfg.assistant);
 }
