@@ -192,11 +192,12 @@
   .whoami .ava { width:38px; height:38px; border-radius:50%; background:#e0e7ff; display:grid; place-items:center; color:#3730a3; }
   .whoami .ava svg { width:20px; height:20px; fill:currentColor; }
   main { max-width:1100px; margin:0 auto; padding:20px 22px 70px; }
-  .dbanner { position:relative; overflow:hidden; border-radius:20px; color:#fff; padding:34px 38px; margin-bottom:18px; min-height:170px;
-    background:linear-gradient(105deg,#0b1f45 0%,#0d3b7a 55%,#0e9aa7 100%); box-shadow:0 10px 28px rgba(13,59,122,.22); display:flex; align-items:center; justify-content:space-between; gap:20px; }
+  .dbanner { position:relative; overflow:hidden; border-radius:20px; color:#fff; padding:34px 38px; margin-bottom:18px; min-height:190px;
+    background-image:linear-gradient(90deg,rgba(7,31,69,.10) 0%,rgba(7,35,78,.42) 34%,rgba(10,52,112,.94) 61%,rgba(14,154,167,.96) 100%),url('/img/clinic-hero.webp');
+    background-position:left center; background-size:cover; box-shadow:0 10px 28px rgba(13,59,122,.18); display:flex; align-items:center; justify-content:space-between; gap:20px; }
   .dbanner h2 { margin:0 0 6px; font-size:32px; line-height:1.4; }
   .dbanner p { margin:0; font-size:17px; color:#d7e8f5; }
-  .dbanner .art { position:absolute; inset:0 auto 0 0; width:55%; opacity:.9; pointer-events:none; }
+  .dbanner .art { position:absolute; inset:0 auto 0 0; width:55%; opacity:.34; pointer-events:none; }
   .dbanner .art svg { width:100%; height:100%; }
   .dbanner .docs { position:relative; display:flex; }
   .dbanner .docs span { display:block; margin-right:-14px; }
@@ -216,6 +217,29 @@
   .dtable td { padding:11px 12px; border-bottom:1px solid #eef2f6; font-size:14px; }
   .dtable tr:last-child td { border-bottom:0; }
   .card { box-shadow:0 2px 8px rgba(15,32,56,.04); border-radius:16px; }
+
+  /* ---------- Clinic Agent 2.0: مدیریت هوشمند */
+  .brand b { letter-spacing:.1px; }
+  .side { box-shadow:-8px 0 28px rgba(15,32,56,.08); }
+  .side .tab { min-height:48px; }
+  .side .tab.on { background:linear-gradient(110deg,#0ea5a4,#14b8a6); }
+  #tab-admin > .card:first-child { border:1px solid #dbe6f2; box-shadow:0 8px 24px rgba(15,32,56,.06); }
+  #admin-list .dstats { margin-top:14px; }
+  #admin-list .dtable { box-shadow:0 8px 24px rgba(15,32,56,.055); }
+  #admin-list .dtable h3 { color:#102b50; }
+  #admin-list .dstat { min-height:112px; }
+  #admin-list .dstat b { color:#102b50; }
+  .disclaimer { padding:12px 0; }
+  @media (max-width:640px) {
+    .dbanner { min-height:150px; padding:22px 18px; background-position:28% center; }
+    .dbanner h2 { font-size:21px; }
+    .dbanner p { font-size:13px; max-width:250px; }
+    .dstats { gap:9px; }
+    .dstat { padding:12px; min-width:0; gap:8px; }
+    .dstat .ic { width:42px; height:42px; }
+    .dstat b { font-size:22px; }
+  }
+
   @media (max-width:900px) {
     .side { position:fixed; right:0; top:0; transform:translateX(100%); transition:transform .2s; box-shadow:-8px 0 30px rgba(0,0,0,.25); }
     .side.open { transform:none; }
@@ -232,16 +256,16 @@
 <aside class="side" id="side">
   <div class="brand">
     <svg width="46" height="46" viewBox="0 0 48 48" fill="none"><path d="M24 42S5 30 5 17.5C5 11 10 7 15.5 7c3.6 0 6.8 1.9 8.5 5 1.7-3.1 4.9-5 8.5-5C38 7 43 11 43 17.5 43 30 24 42 24 42z" fill="#14b8a6" opacity=".22" stroke="#14b8a6" stroke-width="2.4"/><path d="M8 24h9l3-7 5 14 4-9 2 2h9" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    <div><b>کلینیک هوشمند</b><small>نسخه آزمایشی دانشجویی</small></div>
+    <div><b>Clinic Agent 2.0</b><small>سامانه مدیریت هوشمند کلینیک</small></div>
   </div>
   <div class="tabs">
-    <button class="tab on" data-tab="patient"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg><span>بیمار</span></button>
-    <button class="tab" data-tab="assistant"><svg viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 14h.01M15 14h.01M9 17.5h6"/></svg><span>دستیار پزشکی</span></button>
+    <button class="tab" data-tab="patient"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg><span>بیمار</span></button>
+    <button class="tab" data-tab="assistant"><svg viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 14h.01M15 14h.01M9 17.5h6"/></svg><span>دستیار هوشمند</span></button>
     <button class="tab" data-tab="doctor"><svg viewBox="0 0 24 24"><path d="M6 3v6a4 4 0 0 0 8 0V3"/><path d="M10 13v3a4 4 0 0 0 8 0v-1"/><circle cx="18" cy="13" r="2"/></svg><span>پزشک</span></button>
     <button class="tab" data-tab="pharmacy"><svg viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="6" rx="3" transform="rotate(-35 12 12)"/><path d="M9.5 8.5l6 6"/></svg><span>داروخانه</span></button>
-    <button class="tab" data-tab="admin"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg><span>مدیر</span></button>
+    <button class="tab on" data-tab="admin"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg><span>داشبورد مدیریت</span></button>
   </div>
-  <div class="side-foot">🔒 اطلاعات شما در سامانه پزشکی حفظ می‌شود.<br>ایجنت جایگزین پزشک نیست؛ هیچ نسخه یا کدی بدون تأیید پزشک صادر نمی‌شود.</div>
+  <div class="side-foot">🔒 سامانه امن و هوشمند کلینیک<br>تصمیم نهایی و تأیید هر پرونده با پزشک است.</div>
 </aside>
 <div class="content">
 <header class="topbar">
@@ -255,7 +279,7 @@
 <main>
   <div id="banner"></div>
 
-  <section id="tab-patient"><div id="patient-root"><div class="card muted">در حال بارگذاری…</div></div></section>
+  <section id="tab-patient" class="hide"><div id="patient-root"><div class="card muted">در حال بارگذاری…</div></div></section>
 
   <section id="tab-assistant" class="hide">
     <div class="card">
@@ -296,10 +320,10 @@
     <div id="ph-result"></div>
   </section>
 
-  <section id="tab-admin" class="hide">
+  <section id="tab-admin">
     <div class="card">
       <div class="row">
-        <label style="margin:0">رمز مدیر</label>
+        <label style="margin:0">ورود امن مدیر</label>
         <input id="adm-pin" type="password" style="max-width:140px">
         <button class="btn" id="adm-go">ورود</button>
         <button class="btn ghost" id="adm-dl">دانلود همه‌ی پرونده‌ها (JSON)</button>
@@ -446,7 +470,7 @@ const BANNERS = {
   assistant: ['دستیار پزشکی', 'پرسش و پاسخ آزاد درباره‌ی دارو، بیماری و پیشگیری'],
   doctor: ['پنل پزشک', 'بررسی و تأیید پرونده‌های بیماران'],
   pharmacy: ['داروخانه', 'تحویل دارو با کد نسخه‌ی تأییدشده'],
-  admin: ['سامانه مدیریت کلینیک', 'به فضای کاری کلینیک خوش آمدید']
+  admin: ['سامانه مدیریت هوشمند کلینیک', 'از پذیرش بیمار تا تأیید پزشک؛ همه‌چیز یکپارچه و هوشمند']
 };
 const ECG = '<svg viewBox="0 0 600 170" preserveAspectRatio="xMidYMid slice" fill="none"><path d="M0 100h130l18-34 28 78 26-56 14 12h90" stroke="#5eead4" stroke-opacity=".45" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M330 34c-22-30-70-10-52 24 14 26 52 46 52 46s38-20 52-46c18-34-30-54-52-24z" stroke="#7dd3fc" stroke-opacity=".5" stroke-width="3"/><path d="M330 56v28M316 70h28" stroke="#7dd3fc" stroke-opacity=".5" stroke-width="4" stroke-linecap="round"/></svg>';
 function showBanner(tab) {
@@ -460,7 +484,7 @@ $('#burger').onclick = () => $('#side').classList.toggle('open');
 document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => { $('#side').classList.remove('open'); showBanner(b.dataset.tab); }));
 
 /* ================= تب‌ها ================= */
-let currentTab = 'patient';
+let currentTab = 'admin';
 document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
   currentTab = b.dataset.tab;
   document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === b));
@@ -1109,6 +1133,7 @@ setInterval(refreshDoctors, 60000);
     $('#doc-sel').value = sess.get('did') || DOCTORS[0].id;
     $('#pin').value = sess.get('pin');
     showHome();
+    if (sess.get('apin')) loadAdmin(true);
   } catch (e) { root().innerHTML = `<div class="banner b-red">خطا در بارگذاری: ${esc(e.message)}</div>`; }
 })();
 </script>
