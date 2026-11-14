@@ -13,6 +13,9 @@ os.environ.pop("ANTHROPIC_API_KEY", None)
 
 import agent
 import server
+server.REQUIRE_PAYMENT = False  # تست‌های قدیمی بدون مرحله‌ی پرداخت؛ تست پرداخت جداست
+server.REQUIRE_NATIONAL_ID = False  # تست‌های قدیمی بدون کد ملی؛ تست سوابق جداست
+server.SIM_BUSY = False  # تست‌های قدیمی با زمان‌بندی ساده؛ تست نوبت‌های پرشده جداست
 import tools
 
 D = {d["id"]: d for d in tools.DOCTORS}
@@ -193,6 +196,33 @@ def test_llm_mock():
     return (not ok) + (not ok2)
 
 
+def test_llm_skips_redflag():
+    """مدل جعلی مرحله‌ی غربالگری اورژانسی را رد می‌کند؛ گارد قطعی باید جلوی نسخه را بگیرد."""
+    fails = 0
+    def tu(i, name, inp):
+        return {"stop_reason": "tool_use", "content": [{"type": "tool_use", "id": i, "name": name, "input": inp}]}
+    calls = []
+    real_call, real_key = agent._call_api, os.environ.get("ANTHROPIC_API_KEY")
+    agent._call_api = lambda payload: (calls.append(1), tu("x", "create_draft_prescription", {"drug_ids": ["paracetamol"]}))[1]
+    os.environ["ANTHROPIC_API_KEY"], os.environ["AGENT_MODE"] = "test", "auto"
+    try:
+        ctx = run(P(), "درد قفسه سینه و تنگی نفس شدید")
+    finally:
+        agent._call_api = real_call
+        os.environ["AGENT_MODE"] = "demo"
+        if real_key is None:
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+    ok = ctx["outcome"]["type"] == "emergency" and not ctx.get("draft") and not calls
+    print(f"{'PASS' if ok else 'FAIL'}  علائم خطر: مدل اصلاً صدا زده نشد و خروجی اورژانس است")
+    fails += not ok
+    # لایه‌ی دوم: خود ابزار نسخه، بدون اینکه کسی قبلاً غربالگری کرده باشد، اسکن می‌کند
+    c = {"patient": P(), "symptoms": "درد قفسه سینه", "answers": {}, "answers_display": [], "doctor": doc("sohrabi"), "trace": []}
+    out = tools.call_tool(c, "create_draft_prescription", {"drug_ids": ["paracetamol"]})
+    ok2 = "error" in out and not c.get("draft")
+    print(f"{'PASS' if ok2 else 'FAIL'}  گارد ابزار نسخه: بدون غربالگری قبلی هم نسخه ممنوع است")
+    return fails + (not ok2)
+
+
 PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg=="
 PINS = {"sohrabi": "1111", "moradi": "2222", "mousavi": "3333", "karamati": "4444"}
 
@@ -292,7 +322,7 @@ def test_end_to_end():
     st, d1, _ = call("POST", "/api/intake", {"doctor_id": "mousavi", "images": [PNG], "answers": {"age": "30", "sex": "female", "pregnant": "خیر", "complaint": "دندان‌درد", "severity": "5", "duration_days": "3", "swelling": "خیر", "fever": "خیر", "symptoms": "دندان‌درد"}})
     check("دندان: خلاصه + ۱ تصویر ذخیره شد", st == 200 and d1["status"] == "pending_doctor" and d1["image_count"] == 1)
     st, img, hd = call("GET", f"/api/cases/{d1['id']}/images/0", who="mousavi", raw=True)
-    check("دکتر موسوی تصویر را می‌بیند (PNG)", st == 200 and img[:4] == b"\x89PNG" and hd["Content-Type"] == "image/png")
+    check("دکتر مهرجو تصویر را می‌بیند (PNG)", st == 200 and img[:4] == b"\x89PNG" and hd["Content-Type"] == "image/png")
     check("پزشک دیگر تصویر را نمی‌بیند (403)", call("GET", f"/api/cases/{d1['id']}/images/0", who="sohrabi")[0] == 403)
     check("تصویر بدون ورود پزشک (401)", call("GET", f"/api/cases/{d1['id']}/images/0")[0] == 401)
     check("ایندکس تصویر نامعتبر (404)", call("GET", f"/api/cases/{d1['id']}/images/2", who="mousavi")[0] == 404)
@@ -353,6 +383,317 @@ def test_end_to_end():
     check("سقف کل پرونده‌ها (503)", call("POST", "/api/intake", {"doctor_id": "sohrabi", "answers": gp})[0] == 503)
     server.MAX_CASES = oldc
     srv.shutdown()
+    return fails
+
+
+def test_history():
+    fails = 0
+
+    def check(name, cond):
+        nonlocal fails
+        print(f"{'PASS' if cond else 'FAIL'}  {name}")
+        fails += not cond
+
+    def mk(b9):
+        s = sum(int(c) * (10 - i) for i, c in enumerate(b9)) % 11
+        return b9 + str(s if s < 2 else 11 - s)
+    tmp = tempfile.mkdtemp()
+    server.DATA_DIR = tmp
+    server.STORE_PATH = os.path.join(tmp, "store.json")
+    server.UPLOAD_DIR = os.path.join(tmp, "uploads")
+    server.CASES.clear(); server._HITS.clear()
+    server._init_idkey()
+    server.REQUIRE_NATIONAL_ID = True
+    # فیلد کد ملی فعلاً از فرم‌ها برداشته شده؛ برای تست موقتاً به همه‌ی فرم‌ها اضافه می‌شود
+    nat_field = {"id": "national_id", "label": "کد ملی (۱۰ رقم)", "type": "text", "required": True, "national": True, "maxlength": 10, "inputmode": "numeric"}
+    for dd in server.DOCTORS.values():
+        dd["form"]["fields"].insert(1, nat_field)
+    seeded = json.load(open(os.path.join(server.BASE, "data", "history_seed.json"), encoding="utf-8"))["patients"][0]["national_id"]
+    fresh = mk("987654321")
+    check("اعتبارسنجی کد ملی: معتبر / رقم کنترل غلط / تکراری / کوتاه", server._valid_melli(seeded) and not server._valid_melli(seeded[:9] + str((int(seeded[9]) + 1) % 10))
+          and not server._valid_melli("1111111111") and not server._valid_melli("123"))
+    srv = server.make_server("127.0.0.1", 0)
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+
+    def call(method, path, body=None, who=None):
+        h = {"Content-Type": "application/json"}
+        if who:
+            h["X-Doctor-Id"], h["X-Doctor-Pin"] = who, PINS[who]
+        req = urllib.request.Request(base + path, method=method, headers=h, data=json.dumps(body).encode() if body is not None else None)
+        try:
+            with urllib.request.urlopen(req) as r:
+                return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read())
+    base_ans = {"age": "30", "sex": "female", "pregnant": "خیر", "complaint": "دندان‌درد", "symptoms": "دندان‌درد ساده"}
+    try:
+        check("بدون کد ملی: ثبت نمی‌شود (400)", call("POST", "/api/intake", {"doctor_id": "mousavi", "answers": base_ans})[0] == 400)
+        check("کد ملی نامعتبر: ۴۰۰", call("POST", "/api/intake", {"doctor_id": "mousavi", "answers": dict(base_ans, national_id="1234567890")})[0] == 400)
+        fa_code = seeded.translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹"))
+        st, c1 = call("POST", "/api/intake", {"doctor_id": "mousavi", "answers": dict(base_ans, national_id=fa_code)})
+        check("کد ملی با ارقام فارسی پذیرفته می‌شود", st == 200)
+        check("پاسخ بیمار شامل کد ملی یا سوابق نیست", "history" not in c1 and "national" not in c1 and seeded not in json.dumps(c1))
+        cases = call("GET", "/api/cases", who="mousavi")[1]["cases"]
+        mine = next(x for x in cases if x["id"] == c1["id"])
+        h = mine["history"]
+        check("پزشک کد ملی ماسک‌شده می‌بیند", mine["national"] == seeded[:3] + "****" + seeded[-3:])
+        check("سوابق قبلی: ۳ مراجعه، اولین پرونده حدود ۲ سال پیش با تاریخ شمسی", h["count"] == 3 and h["first"]["ago"] == "۲ سال پیش" and "۱۴۰" in h["first"]["date"])
+        st, c2 = call("POST", "/api/intake", {"doctor_id": "sohrabi", "answers": {"age": "30", "sex": "female", "pregnant": "خیر", "allergies": "", "symptoms": "سرفه", "national_id": seeded}})
+        h2 = next(x for x in call("GET", "/api/cases", who="sohrabi")[1]["cases"] if x["id"] == c2["id"])["history"]
+        check("سابقه‌ی پرونده‌ی ثبت‌شده در پزشک دیگر هم دیده می‌شود (۴ مراجعه)", h2["count"] == 4 and any(i["doctor"] == "دکتر مهرجو" and "دندان" in i["summary"] for i in h2["items"]))
+        st, c3 = call("POST", "/api/intake", {"doctor_id": "mousavi", "answers": dict(base_ans, national_id=fresh)})
+        h3 = next(x for x in call("GET", "/api/cases", who="mousavi")[1]["cases"] if x["id"] == c3["id"])
+        check("بیمار جدید: بدون سابقه", h3["history"]["count"] == 0 and h3["history"]["first"] is None)
+        adm = server.ADMIN_PIN
+        req = urllib.request.Request(base + "/api/admin/cases", headers={"X-Admin-Pin": adm})
+        ac = json.loads(urllib.request.urlopen(req).read())["cases"]
+        check("مدیر هم سوابق را می‌بیند", any(x["id"] == c1["id"] and x["history"]["count"] == 4 for x in ac))
+        raw = open(server.STORE_PATH, encoding="utf-8").read() if os.path.exists(server.STORE_PATH) else ""
+        check("کد ملی خام در فایل ذخیره نیست (فقط هش و ماسک)", raw and seeded not in raw and fresh not in raw and "****" in raw)
+    finally:
+        for dd in server.DOCTORS.values():
+            dd["form"]["fields"] = [f for f in dd["form"]["fields"] if not f.get("national")]
+        srv.shutdown()
+        server.REQUIRE_NATIONAL_ID = False
+        server.CASES.clear(); server._HITS.clear()
+    return fails
+
+
+def test_busy_slots():
+    from datetime import datetime, timedelta
+    import calendar_fa as cf
+    fails = 0
+
+    def check(name, cond):
+        nonlocal fails
+        print(f"{'PASS' if cond else 'FAIL'}  {name}")
+        fails += not cond
+    server.SIM_BUSY = True
+    try:
+        now = datetime(2026, 11, 11, 17, 5, tzinfo=cf.IRAN)
+        res = {}
+        for did, d in D.items():
+            sch, busy = d["schedule"], server._busy_fn(d)
+            s1 = cf.next_slot(sch, set(), now_dt=now, busy=busy)
+            s2 = cf.next_slot(sch, set(), now_dt=now, busy=busy)
+            plain = cf.next_slot(sch, set(), now_dt=now)
+            allslots = [s for i in range(22) for s in cf.slots_for_day(sch, (now + timedelta(days=i)).date())]
+            frac = sum(1 for s in allslots if busy(s)) / len(allslots)
+            res[did] = (s1, plain)
+            first = [s for s in allslots if s.strftime("%H:%M") == sch["start"]]
+            check(f"{did}: پایدار، روی شبکه‌ی نوبت‌ها، اولین ساعت هر روز همیشه پر، نرخ پری معقول", s1 == s2 and s1 >= plain
+                  and (s1.hour * 60 + s1.minute - int(sch['start'][:2]) * 60 - int(sch['start'][3:])) % sch["slot"] == 0
+                  and all(busy(s) for s in first) and s1.strftime("%H:%M") != sch["start"] and 0.4 < frac < 0.9)
+        check("اولین وقت پیشنهادی هیچ پزشکی اولین ساعت کاری نیست", all(s1.strftime("%H:%M") != D[k]["schedule"]["start"] for k, (s1, _) in res.items()))
+        check("با خاموش‌بودن شبیه‌سازی همان رفتار ساده است", (setattr(server, "SIM_BUSY", False), server._busy_fn(D["sohrabi"]))[1] is None)
+    finally:
+        server.SIM_BUSY = False
+    return fails
+
+
+def test_payment():
+    fails = 0
+
+    def check(name, cond):
+        nonlocal fails
+        print(f"{'PASS' if cond else 'FAIL'}  {name}")
+        fails += not cond
+    tmp = tempfile.mkdtemp()
+    server.STORE_PATH = os.path.join(tmp, "store.json")
+    server.UPLOAD_DIR = os.path.join(tmp, "uploads")
+    server.CASES.clear(); server.PAYMENTS.clear(); server._HITS.clear()
+    server.REQUIRE_PAYMENT = True
+    srv = server.make_server("127.0.0.1", 0)
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+
+    def call(path, body):
+        req = urllib.request.Request(base + path, method="POST", headers={"Content-Type": "application/json"}, data=json.dumps(body).encode())
+        try:
+            with urllib.request.urlopen(req) as r:
+                return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read())
+    ans = {"age": "30", "sex": "male", "allergies": "", "symptoms": "گلودرد خفیف"}
+    try:
+        check("همه‌ی پزشکان هزینه‌ی ویزیت دارند", all(isinstance(d.get("fee"), int) and d["fee"] > 0 for d in tools.DOCTORS))
+        check("هر پزشک نظر منفی/متوسط دارد", all(min(r["rating"] for r in d["reviews"]) <= 3 for d in tools.DOCTORS))
+        check("نظرات مثبت و منفی هر پزشک برابر است (۳ به ۳)", all(sum(r["rating"] >= 4 for r in d["reviews"]) == sum(r["rating"] <= 3 for r in d["reviews"]) == 3 for d in tools.DOCTORS))
+        import re as _re
+        check("هیچ نظری از انتظار/معطلی نمی‌گوید (سیستم آنلاین است)", not any(_re.search("انتظار|معطل|منتظر|دیر شروع|ساعت نوبت", r["text"]) for d in tools.DOCTORS for r in d["reviews"]))
+        ob = D["karamati"]
+        fem = {"سمیرا", "الهام", "بهار", "مینا", "مهسا", "پریسا"}
+        check("نظرات زنان و زایمان فقط با نام زنانه", all(r["name"].split()[0] in fem for r in ob["reviews"]))
+        check("بدون پرداخت: ثبت پرونده ممنوع (402)", call("/api/intake", {"doctor_id": "sohrabi", "answers": ans})[0] == 402)
+        st, p = call("/api/payments", {"doctor_id": "sohrabi"})
+        check("پرداخت آزمایشی کد رهگیری و مبلغ می‌دهد", st == 200 and p["ref"].startswith("PAY-") and len(p["ref"]) == 10 and p["amount"] == D["sohrabi"]["fee"])
+        check("پرداخت بدون تأیید کد: هنوز ممنوع (402)", call("/api/intake", {"doctor_id": "sohrabi", "answers": ans, "payment_ref": p["ref"]})[0] == 402)
+        check("کد غلط رد می‌شود (400)", call("/api/payments/verify", {"doctor_id": "sohrabi", "ref": "PAY-000000" if p["ref"] != "PAY-000000" else "PAY-111111"})[0] == 400)
+        check("کد پزشک دیگر رد می‌شود", call("/api/payments/verify", {"doctor_id": "moradi", "ref": p["ref"]})[0] == 400)
+        fa_ref = p["ref"][4:].translate(str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹"))
+        check("تأیید با ارقام فارسی و بدون PAY- هم کار می‌کند", call("/api/payments/verify", {"doctor_id": "sohrabi", "ref": fa_ref})[0] == 200)
+        st, c = call("/api/intake", {"doctor_id": "sohrabi", "answers": ans, "payment_ref": p["ref"]})
+        check("بعد از تأیید کد: ثبت پرونده و ذخیره‌ی پرداخت", st == 200 and c["payment"]["ref"] == p["ref"] and c["payment"]["amount"] == p["amount"])
+        check("هر کد فقط یک‌بار قابل استفاده است", call("/api/intake", {"doctor_id": "sohrabi", "answers": ans, "payment_ref": p["ref"]})[0] == 402)
+        check("پزشک نامعتبر برای پرداخت (400)", call("/api/payments", {"doctor_id": "x"})[0] == 400)
+        server._HITS.clear()
+        codes = [call("/api/payments/verify", {"doctor_id": "sohrabi", "ref": "PAY-999999"})[0] for _ in range(17)]
+        check("حدس‌زدن کد: بعد از چند تلاش قفل (429)", codes[-1] == 429)
+    finally:
+        srv.shutdown()
+        server.REQUIRE_PAYMENT = False
+        server.CASES.clear(); server.PAYMENTS.clear(); server._HITS.clear()
+    return fails
+
+
+def test_gate():
+    import http.client
+    fails = 0
+
+    def check(name, cond):
+        nonlocal fails
+        print(f"{'PASS' if cond else 'FAIL'}  {name}")
+        fails += not cond
+    tmp = tempfile.mkdtemp()
+    server.STORE_PATH = os.path.join(tmp, "store.json")
+    server.UPLOAD_DIR = os.path.join(tmp, "uploads")
+    server.CASES.clear()
+    server._HITS.clear()
+    server.GUESTS.clear()
+    server.OWNER_KEY, server.GATE = "owner-key-12345", True
+    clock = [1000.0]
+    real_now = server._now
+    server._now = lambda: clock[0]
+    srv = server.make_server("127.0.0.1", 0)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    port = srv.server_address[1]
+
+    def req(method, path, cookie=None, body=None, admin=False):
+        c = http.client.HTTPConnection("127.0.0.1", port)
+        h = {"Content-Type": "application/json"}
+        if cookie:
+            h["Cookie"] = "acc=" + cookie
+        if admin:
+            h["X-Admin-Pin"] = "9999"
+        c.request(method, path, body=json.dumps(body) if body is not None else None, headers=h)
+        r = c.getresponse()
+        raw = r.read()
+        sc = r.getheader("Set-Cookie") or ""
+        ck = sc.split("acc=")[1].split(";")[0] if "acc=" in sc else None
+        try:
+            js = json.loads(raw)
+        except Exception:
+            js = None
+        return r.status, js, ck, r.getheader("Location")
+    try:
+        check("بدون لینک: صفحه‌ی اصلی ۴۰۳", req("GET", "/")[0] == 403)
+        st, js, _, _ = req("GET", "/api/doctors")
+        check("بدون لینک: سلامت‌سنجی /api/doctors همچنان ۲۰۰ (فقط gated)", st == 200 and js == {"gated": True})
+        check("بدون لینک: API و POST بسته است", req("GET", "/api/cases")[0] == 403 and req("POST", "/api/intake", body={})[0] == 403)
+        check("کلید مالک غلط رد می‌شود", req("GET", "/?k=bad")[0] == 403)
+        st, _, own, loc = req("GET", "/?k=owner-key-12345")
+        check("کلید مالک → کوکی و ریدایرکت به /", st == 302 and own and loc == "/")
+        check("با کوکی مالک سایت باز است", req("GET", "/", cookie=own)[0] == 200 and "doctors" in req("GET", "/api/doctors", cookie=own)[1])
+        st, js, _, _ = req("POST", "/api/admin/links", cookie=own, body={"minutes": 5}, admin=True)
+        check("مدیر لینک ۵ دقیقه‌ای می‌سازد", st == 200 and js["path"].startswith("/?g=") and js["minutes"] == 5)
+        link = js["path"]
+        check("ساخت لینک بدون رمز مدیر ممنوع (401)", req("POST", "/api/admin/links", cookie=own, body={})[0] == 401)
+        tok = link.split("g=")[1]
+        st, html, _, _ = req("GET", link)
+        check("باز کردن لینک فقط صفحه‌ی «شروع» را نشان می‌دهد و شمارش نمی‌سوزد", st == 200 and server.GUESTS[tok]["first"] is None)
+        check("باز کردن مکرر (مثل پیش‌نمایش پیام‌رسان) لینک را نمی‌سوزاند", req("GET", link)[0] == 200 and server.GUESTS[tok]["first"] is None)
+        check("شروع با توکن غلط رد می‌شود", req("POST", "/api/guest/start", body={"token": "nope"})[0] == 403)
+        st, _, g, _ = req("POST", "/api/guest/start", body={"token": tok})
+        check("مهمان: زدن «شروع» کوکی می‌دهد و شمارش شروع می‌شود", st == 200 and g and g.startswith("g.") and server.GUESTS[tok]["first"] is not None)
+        check("شروع دوباره با همان توکن رد می‌شود", req("POST", "/api/guest/start", body={"token": tok})[0] == 403)
+        check("مهمان با کوکی خودش دوباره لینک را باز می‌کند (ریدایرکت)", req("GET", link, cookie=g)[0] == 302)
+        check("مهمان: ۱ دقیقه بعد هنوز سایت باز است", (clock.__setitem__(0, clock[0] + 60), req("GET", "/api/doctors", cookie=g)[1])[1].get("doctors") is not None)
+        check("نفر دوم با همان لینک (کوکی ندارد) رد می‌شود", req("GET", link)[0] == 403)
+        check("مهمان دسترسی به API پرونده‌ها ندارد (بدون رمز)", req("GET", "/api/cases", cookie=g)[0] == 401)
+        clock[0] += 5 * 60
+        st, js, _, _ = req("GET", "/api/doctors", cookie=g)
+        check("بعد از ۵ دقیقه از اولین باز کردن: ۴۰۳ با code=access", st == 200 and js == {"gated": True} and req("GET", "/api/cases", cookie=g)[1]["code"] == "access")
+        check("بعد از انقضا صفحه و لینک هم بسته است", req("GET", "/", cookie=g)[0] == 403 and req("GET", link, cookie=g)[0] == 403)
+        check("مالک همچنان وارد می‌شود", req("GET", "/", cookie=own)[0] == 200)
+        st, js, _, _ = req("POST", "/api/admin/links", cookie=own, body={"minutes": 5}, admin=True)
+        clock[0] += 3601
+        check("لینکی که هرگز باز نشود بعد از ۱ ساعت باطل می‌شود", req("GET", js["path"])[0] == 403)
+        st, js, _, _ = req("GET", "/api/admin/links", cookie=own, admin=True)
+        check("لیست لینک‌ها وضعیت منقضی را نشان می‌دهد", st == 200 and js["gate"] and all(l["state"] == "expired" and l["path"] == "" for l in js["links"]))
+        st, js, _, _ = req("POST", "/api/admin/links", cookie=own, body={"minutes": 999}, admin=True)
+        check("مدت بیشتر از ۶۰ دقیقه به ۶۰ محدود می‌شود", js["minutes"] == 60)
+    finally:
+        srv.shutdown()
+        server._now = real_now
+        server.OWNER_KEY, server.GATE = "", False
+        server.GUESTS.clear()
+        server._HITS.clear()
+    return fails
+
+
+def test_compat_provider():
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    seen = {}
+
+    class H(BaseHTTPRequestHandler):
+        def do_POST(self):
+            n = int(self.headers["Content-Length"])
+            seen["path"], seen["auth"], seen["body"] = self.path, self.headers["Authorization"], json.loads(self.rfile.read(n))
+            out = json.dumps({"choices": [{"message": {"content": "پاسخ آزمایشی"}}]}).encode()
+            self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers(); self.wfile.write(out)
+
+        def log_message(self, *a):
+            pass
+    fs = HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=fs.serve_forever, daemon=True).start()
+    fails = 0
+
+    def check(name, cond):
+        nonlocal fails
+        print(f"{'PASS' if cond else 'FAIL'}  {name}")
+        fails += not cond
+    for k in ("ANTHROPIC_API_KEY", "LLM_API_KEY", "LLM_API_BASE", "LLM_MODEL"):
+        os.environ.pop(k, None)
+    check("بدون هیچ کلیدی غیرفعال", agent.llm_available() is False)
+    os.environ.update(LLM_API_KEY="k123", LLM_API_BASE=f"http://127.0.0.1:{fs.server_address[1]}/v1/", LLM_MODEL="qwen-test")
+    check("با سه متغیر LLM_* فعال", agent.llm_available() is True)
+    r = agent.ask_assistant([{"role": "user", "content": "سلام"}])
+    b = seen["body"]
+    check("درخواست به /chat/completions با کلید، مدل و پرامپت ایمنی", r == "پاسخ آزمایشی" and seen["path"] == "/v1/chat/completions"
+          and seen["auth"] == "Bearer k123" and b["model"] == "qwen-test" and b["messages"][0]["role"] == "system"
+          and "NOT a doctor" in b["messages"][0]["content"] and b["messages"][-1]["content"] == "سلام")
+    for k in ("LLM_API_KEY", "LLM_API_BASE", "LLM_MODEL"):
+        os.environ.pop(k, None)
+    fs.shutdown()
+    return fails
+
+
+def test_notify():
+    import notify
+    sent = []
+    real = notify._send
+    notify._send = lambda text: sent.append(text)
+    fails = 0
+
+    def check(name, cond):
+        nonlocal fails
+        print(f"{'PASS' if cond else 'FAIL'}  {name}")
+        fails += not cond
+    case = {"patient": {"name": "علی", "age": 30}, "created": "x", "status": "referred", "symptoms": "گلودرد",
+            "answers_display": [{"label": "سن", "value": "30"}], "images": [1], "appointment": {"text": "شنبه ۲۳ آبان ۱۴۰۵ ساعت ۱۶:۰۰"}}
+    for k in ("NOTIFY_BOT_TOKEN", "NOTIFY_CHAT_ID"):
+        os.environ.pop(k, None)
+    notify.notify_case(case, "دکتر سهرابی")
+    check("بدون تنظیم: چیزی ارسال نمی‌شود", not sent and not notify.enabled())
+    os.environ["NOTIFY_BOT_TOKEN"], os.environ["NOTIFY_CHAT_ID"] = "t", "1"
+    notify.notify_case(case, "دکتر سهرابی")
+    import time as _t
+    _t.sleep(0.3)
+    check("با تنظیم: متن شامل بیمار، وقت و شرح حال", len(sent) == 1 and "علی" in sent[0] and "ساعت ۱۶:۰۰" in sent[0] and "گلودرد" in sent[0])
+    for k in ("NOTIFY_BOT_TOKEN", "NOTIFY_CHAT_ID"):
+        os.environ.pop(k, None)
+    notify._send = real
     return fails
 
 
@@ -427,8 +768,10 @@ def test_calendar_assistant():
         check("بعد از ۳ بار جابه‌جایی (429)", call("POST", f"/api/cases/{c1['id']}/reschedule", {})[0] == 429)
         check("نوبت در لیست پزشک دیده می‌شود", any(x["id"] == c1["id"] and x["appointment"] for x in call("GET", "/api/cases", who="sohrabi")[1]["cases"]))
         st, em = call("POST", "/api/intake", {"doctor_id": "sohrabi", "answers": {"age": "50", "sex": "male", "allergies": "", "symptoms": "درد قفسه سینه"}})
-        check("اورژانس → نوبت داده نمی‌شود و جابه‌جایی ممنوع (409)", em["status"] == "emergency" and not em.get("appointment")
-              and call("POST", f"/api/cases/{em['id']}/reschedule", {})[0] == 409)
+        check("اورژانس → پیام ۱۱۵ + وقت پیگیری (followup) داده می‌شود", em["status"] == "emergency" and "۱۱۵" in em["message"]
+              and em["appointment"] and em["appointment"].get("followup") is True)
+        st, rs = call("POST", f"/api/cases/{em['id']}/reschedule", {})
+        check("وقت پیگیری اورژانس قابل جابه‌جایی است و برچسب followup می‌ماند", st == 200 and rs["appointment"].get("followup") is True)
         check("جابه‌جایی پرونده‌ی ناموجود (404)", call("POST", "/api/cases/00000000/reschedule", {})[0] == 404)
         dent = {"age": "30", "sex": "female", "pregnant": "خیر", "complaint": "دندان‌درد", "severity": "5", "duration_days": "3", "swelling": "خیر", "fever": "خیر", "symptoms": "دندان‌درد"}
         st, d = call("POST", "/api/intake", {"doctor_id": "mousavi", "answers": dent})
@@ -482,8 +825,21 @@ if __name__ == "__main__":
     total += test_guards()
     print("\n── حلقه‌ی LLM ──")
     total += test_llm_mock()
+    total += test_llm_skips_redflag()
     print("\n── جریان کامل (HTTP) ──")
     total += test_end_to_end()
+    print("\n── کد ملی و سوابق بیمار ──")
+    total += test_history()
+    print("\n── نوبت‌های پرشده‌ی فرضی ──")
+    total += test_busy_slots()
+    print("\n── پرداخت آزمایشی و نظرات ──")
+    total += test_payment()
+    print("\n── قفل دسترسی و لینک مهمان موقت ──")
+    total += test_gate()
+    print("\n── سرویس سازگار با OpenAI ──")
+    total += test_compat_provider()
+    print("\n── اعلان ──")
+    total += test_notify()
     print("\n── تقویم، نوبت‌دهی و دستیار پزشکی ──")
     total += test_calendar_assistant()
     print("\n" + ("همه‌ی تست‌ها موفق بود ✔" if total == 0 else f"{total} تست ناموفق"))
