@@ -163,41 +163,97 @@
   .disclaimer { font-size:12.5px; color:var(--muted); text-align:center; margin-top:14px; }
   @media (max-width:640px) { .hero-art { display:none; } .hero h2 { font-size:18px; } }
 
-  /* ---------- ظاهر داشبوردی (سایدبار تیره + بنر) ---------- */
-  :root { --bg:#f4f7fa; --accent:#0f8f84; --soft:#e3f5f2; --navy:#12233b; --line:#e2e8ef; }
-  body { font-family: Vazirmatn, Tahoma, "Segoe UI", system-ui, sans-serif; }
-  header { background:linear-gradient(110deg,#14263f,#2b536c); padding:22px 28px; }
-  header h1 { font-size:20px; }
-  header p { color:#d0dbe6; opacity:1; }
-  .card { border-radius:14px; box-shadow:0 1px 2px rgba(18,35,59,.04); }
-  .tab { border-radius:9px; }
-  .tab.on { background:var(--accent); border-color:var(--accent); }
-  @media (min-width:900px) {
-    main { max-width:1240px; display:grid; grid-template-columns:220px minmax(0,1fr); gap:0 28px; align-items:start; padding:24px 28px 70px; }
-    main > * { grid-column:2; min-width:0; }
-    main > .tabs { grid-column:1; grid-row:1 / span 30; position:sticky; top:16px; flex-direction:column; gap:6px;
-      background:var(--navy); padding:18px 12px; border-radius:16px; margin:0; }
-    .tab { text-align:right; background:transparent; border-color:transparent; color:#b8c6d6; padding:12px 16px; flex:none; }
-    .tab:hover { background:#263c58; color:#fff; }
-    .tab.on { background:#263c58; color:#fff; box-shadow:inset -3px 0 0 #19aa9d; }
+
+  /* ================= ظاهر داشبوردی ================= */
+  :root { --bg:#f1f5f9; --navy:#0f2038; --navy2:#1b3150; --teal:#14b8a6; --line:#e3e9f0; }
+  body { background:var(--bg); font-family: Vazirmatn, Tahoma, "Segoe UI", system-ui, sans-serif; }
+  .shell { display:flex; min-height:100vh; }
+  .side { width:250px; flex:none; background:linear-gradient(180deg,#0f2038,#14294a); color:#fff; padding:20px 14px; display:flex; flex-direction:column;
+    position:sticky; top:0; height:100vh; z-index:30; }
+  .brand { display:flex; align-items:center; gap:10px; padding:4px 8px 22px; border-bottom:1px solid rgba(255,255,255,.08); margin-bottom:16px; }
+  .brand b { font-size:19px; display:block; line-height:1.2; }
+  .brand small { color:#9fb3cc; font-size:12px; }
+  .side .tabs { display:flex; flex-direction:column; gap:6px; margin:0; }
+  .tab { display:flex; align-items:center; gap:12px; text-align:right; background:transparent; border:0; color:#c3d0e0; padding:12px 14px;
+    border-radius:11px; font-size:15px; flex:none; }
+  .tab svg { width:22px; height:22px; flex:none; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  .tab:hover { background:rgba(255,255,255,.07); color:#fff; }
+  .tab.on { background:var(--teal); color:#fff; font-weight:700; box-shadow:0 6px 16px rgba(20,184,166,.28); }
+  .side-foot { margin-top:auto; border-top:1px solid rgba(255,255,255,.08); padding:14px 8px 4px; font-size:12px; color:#9fb3cc; line-height:1.9; }
+  .content { flex:1; min-width:0; }
+  header.topbar { background:#fff; color:var(--ink); border-bottom:1px solid var(--line); padding:0 22px; height:64px; display:flex; align-items:center; gap:14px; position:sticky; top:0; z-index:20; }
+  header.topbar #clock { margin:0; font-size:13px; opacity:1; color:var(--muted); }
+  .burger { display:none; background:transparent; border:0; padding:6px; cursor:pointer; color:var(--ink); }
+  .burger svg { width:26px; height:26px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; }
+  .bell { position:relative; background:#f1f5f9; border:0; width:40px; height:40px; border-radius:50%; display:grid; place-items:center; cursor:pointer; color:var(--ink); }
+  .bell svg { width:21px; height:21px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  .bell i { position:absolute; top:-3px; left:-3px; min-width:19px; height:19px; padding:0 5px; border-radius:99px; background:#ef4444; color:#fff; font:700 11px/19px inherit; text-align:center; font-style:normal; }
+  .whoami { display:flex; align-items:center; gap:9px; font-size:14px; }
+  .whoami .ava { width:38px; height:38px; border-radius:50%; background:#e0e7ff; display:grid; place-items:center; color:#3730a3; }
+  .whoami .ava svg { width:20px; height:20px; fill:currentColor; }
+  main { max-width:1100px; margin:0 auto; padding:20px 22px 70px; }
+  .dbanner { position:relative; overflow:hidden; border-radius:20px; color:#fff; padding:34px 38px; margin-bottom:18px; min-height:170px;
+    background:linear-gradient(105deg,#0b1f45 0%,#0d3b7a 55%,#0e9aa7 100%); box-shadow:0 10px 28px rgba(13,59,122,.22); display:flex; align-items:center; justify-content:space-between; gap:20px; }
+  .dbanner h2 { margin:0 0 6px; font-size:32px; line-height:1.4; }
+  .dbanner p { margin:0; font-size:17px; color:#d7e8f5; }
+  .dbanner .art { position:absolute; inset:0 auto 0 0; width:55%; opacity:.9; pointer-events:none; }
+  .dbanner .art svg { width:100%; height:100%; }
+  .dbanner .docs { position:relative; display:flex; }
+  .dbanner .docs span { display:block; margin-right:-14px; }
+  .dbanner .docs svg, .dbanner .docs img { width:64px; height:64px; border-radius:50%; border:3px solid #fff; background:#fff; display:block; }
+  .dbanner .txt { position:relative; }
+  .dstats { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:18px; }
+  .dstat { background:#fff; border-radius:16px; padding:16px 18px; display:flex; align-items:center; gap:14px; border:1px solid var(--line);
+    border-bottom:4px solid var(--c); box-shadow:0 2px 8px rgba(15,32,56,.05); }
+  .dstat .ic { width:54px; height:54px; border-radius:50%; background:var(--cbg); color:var(--c); display:grid; place-items:center; flex:none; }
+  .dstat .ic svg { width:27px; height:27px; stroke:currentColor; fill:none; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
+  .dstat b { display:block; font-size:30px; line-height:1.1; }
+  .dstat span { color:var(--muted); font-size:14px; }
+  .dtable { background:#fff; border:1px solid var(--line); border-radius:16px; padding:16px 18px; margin-bottom:18px; box-shadow:0 2px 8px rgba(15,32,56,.05); overflow:auto; }
+  .dtable h3 { display:flex; align-items:center; gap:8px; margin:0 0 12px; font-size:17px; }
+  .dtable table { width:100%; border-collapse:collapse; min-width:480px; }
+  .dtable th { background:#f1f5f9; color:var(--muted); font-weight:600; font-size:13px; text-align:right; padding:10px 12px; }
+  .dtable td { padding:11px 12px; border-bottom:1px solid #eef2f6; font-size:14px; }
+  .dtable tr:last-child td { border-bottom:0; }
+  .card { box-shadow:0 2px 8px rgba(15,32,56,.04); border-radius:16px; }
+  @media (max-width:900px) {
+    .side { position:fixed; right:0; top:0; transform:translateX(100%); transition:transform .2s; box-shadow:-8px 0 30px rgba(0,0,0,.25); }
+    .side.open { transform:none; }
+    .burger { display:block; }
+    .dstats { grid-template-columns:1fr 1fr; }
+    .dbanner { padding:24px 22px; } .dbanner h2 { font-size:24px; } .dbanner .docs { display:none; } .dbanner .art { opacity:.35; width:100%; }
+    header.topbar #clock { display:none; }
+    main { padding:14px 12px 70px; }
   }
 </style>
 </head>
 <body>
-<header>
-  <h1>کلینیک هوشمند — پیش‌غربالگری و ویزیت آنلاین</h1>
-  <p>نسخه آزمایشی دانشجویی. ایجنت جایگزین پزشک نیست و هیچ نسخه یا کدی بدون تأیید پزشک صادر نمی‌شود.</p>
+<div class="shell">
+<aside class="side" id="side">
+  <div class="brand">
+    <svg width="46" height="46" viewBox="0 0 48 48" fill="none"><path d="M24 42S5 30 5 17.5C5 11 10 7 15.5 7c3.6 0 6.8 1.9 8.5 5 1.7-3.1 4.9-5 8.5-5C38 7 43 11 43 17.5 43 30 24 42 24 42z" fill="#14b8a6" opacity=".22" stroke="#14b8a6" stroke-width="2.4"/><path d="M8 24h9l3-7 5 14 4-9 2 2h9" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div><b>کلینیک هوشمند</b><small>نسخه آزمایشی دانشجویی</small></div>
+  </div>
+  <div class="tabs">
+    <button class="tab on" data-tab="patient"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg><span>بیمار</span></button>
+    <button class="tab" data-tab="assistant"><svg viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 14h.01M15 14h.01M9 17.5h6"/></svg><span>دستیار پزشکی</span></button>
+    <button class="tab" data-tab="doctor"><svg viewBox="0 0 24 24"><path d="M6 3v6a4 4 0 0 0 8 0V3"/><path d="M10 13v3a4 4 0 0 0 8 0v-1"/><circle cx="18" cy="13" r="2"/></svg><span>پزشک</span></button>
+    <button class="tab" data-tab="pharmacy"><svg viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="6" rx="3" transform="rotate(-35 12 12)"/><path d="M9.5 8.5l6 6"/></svg><span>داروخانه</span></button>
+    <button class="tab" data-tab="admin"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg><span>مدیر</span></button>
+  </div>
+  <div class="side-foot">🔒 اطلاعات شما در سامانه پزشکی حفظ می‌شود.<br>ایجنت جایگزین پزشک نیست؛ هیچ نسخه یا کدی بدون تأیید پزشک صادر نمی‌شود.</div>
+</aside>
+<div class="content">
+<header class="topbar">
+  <button class="burger" id="burger" aria-label="منو"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
   <div id="clock" aria-live="off"></div>
+  <span class="sp"></span>
+  <button class="bell" id="bell" title="فرم‌های در انتظار تأیید"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><i id="bell-n" class="hide">0</i></button>
+  <div class="whoami"><span id="whoami">مهمان</span><div class="ava"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z"/></svg></div></div>
 </header>
 
 <main>
-  <div class="tabs">
-    <button class="tab on" data-tab="patient">بیمار</button>
-    <button class="tab" data-tab="assistant">دستیار پزشکی</button>
-    <button class="tab" data-tab="doctor">پزشک</button>
-    <button class="tab" data-tab="pharmacy">داروخانه</button>
-    <button class="tab" data-tab="admin">مدیر</button>
-  </div>
+  <div id="banner"></div>
 
   <section id="tab-patient"><div id="patient-root"><div class="card muted">در حال بارگذاری…</div></div></section>
 
@@ -262,6 +318,7 @@
 
   <p class="disclaimer">این سامانه فاقد اعتبار پزشکی و درمانی است.</p>
 </main>
+</div></div>
 
 <script>
 const $ = (s, r = document) => r.querySelector(s);
@@ -355,6 +412,52 @@ function heroHtml(d, compact = false) {
         <div class="stars">${stars(r)} <span>${fa(r)}</span> <span class="small">(${fa(d.reviews.length)} نظر نمونه)</span></div></div>
       ${compact ? '' : `<div class="hero-art">${heroSvg(d.kind)}</div>`}</div></div>`;
 }
+
+
+/* ================= داشبورد: بنر، آمار، جدول ================= */
+const IC = {
+  all: '<rect x="4" y="5" width="16" height="16" rx="3"/><path d="M8 3v4M16 3v4M4 10h16"/>',
+  wait: '<path d="M6 3h12M6 21h12M7 3c0 5 5 6 5 9s-5 4-5 9M17 3c0 5-5 6-5 9s5 4 5 9"/>',
+  emer: '<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>',
+  ok: '<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>'
+};
+function statsHtml(cases) {
+  const n = f => cases.filter(f).length;
+  const items = [
+    ['کل پرونده‌ها', cases.length, '#2563eb', '#dbeafe', IC.all],
+    ['در انتظار تأیید', n(c => c.status === 'pending_doctor'), '#d97706', '#fef3c7', IC.wait],
+    ['اورژانسی', n(c => c.status === 'emergency'), '#dc2626', '#fee2e2', IC.emer],
+    ['تأییدشده', n(c => ['approved', 'accepted', 'dispensed'].includes(c.status)), '#059669', '#d1fae5', IC.ok]
+  ];
+  return `<div class="dstats">${items.map(i => `<div class="dstat" style="--c:${i[2]};--cbg:${i[3]}"><div class="ic"><svg viewBox="0 0 24 24">${i[4]}</svg></div><div><b>${fa(i[1])}</b><span>${i[0]}</span></div></div>`).join('')}</div>`;
+}
+function tableHtml(cases, withDoctor) {
+  const rows = cases.slice(0, 6).map(c => `<tr><td>${esc((c.patient && c.patient.name) || 'بدون نام')}</td>
+    ${withDoctor ? `<td>${esc((c.doctor && c.doctor.name) || '')}</td>` : ''}<td>${esc(c.created || '')}</td><td>${badge(c.status)}</td></tr>`).join('');
+  return `<div class="dtable"><h3><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${IC.all}</svg>آخرین پرونده‌ها</h3>
+    ${cases.length ? `<table><tr><th>بیمار</th>${withDoctor ? '<th>پزشک</th>' : ''}<th>تاریخ</th><th>وضعیت</th></tr>${rows}</table>` : '<div class="muted">هنوز پرونده‌ای ثبت نشده است.</div>'}</div>`;
+}
+function updateBell(cases) {
+  const n = cases.filter(c => c.status === 'pending_doctor').length, el = $('#bell-n');
+  el.textContent = fa(n); el.classList.toggle('hide', !n);
+}
+const BANNERS = {
+  patient: ['کلینیک هوشمند', 'ایجنت اطلاعات را جمع می‌کند، تصمیم نهایی با پزشک است'],
+  assistant: ['دستیار پزشکی', 'پرسش و پاسخ آزاد درباره‌ی دارو، بیماری و پیشگیری'],
+  doctor: ['پنل پزشک', 'بررسی و تأیید پرونده‌های بیماران'],
+  pharmacy: ['داروخانه', 'تحویل دارو با کد نسخه‌ی تأییدشده'],
+  admin: ['سامانه مدیریت کلینیک', 'به فضای کاری کلینیک خوش آمدید']
+};
+const ECG = '<svg viewBox="0 0 600 170" preserveAspectRatio="xMidYMid slice" fill="none"><path d="M0 100h130l18-34 28 78 26-56 14 12h90" stroke="#5eead4" stroke-opacity=".45" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M330 34c-22-30-70-10-52 24 14 26 52 46 52 46s38-20 52-46c18-34-30-54-52-24z" stroke="#7dd3fc" stroke-opacity=".5" stroke-width="3"/><path d="M330 56v28M316 70h28" stroke="#7dd3fc" stroke-opacity=".5" stroke-width="4" stroke-linecap="round"/></svg>';
+function showBanner(tab) {
+  const [t, sub] = BANNERS[tab] || BANNERS.patient;
+  const docs = tab === 'patient' ? `<div class="docs">${DOCTORS.map(d => `<span title="${esc(d.name)}">${photoOrAvatar(d, 64)}</span>`).join('')}</div>` : '';
+  $('#banner').innerHTML = `<div class="dbanner"><div class="art">${ECG}</div><div class="txt"><h2>${esc(t)}</h2><p>${esc(sub)}</p></div>${docs}</div>`;
+  const who = { doctor: () => { const d = docById(sess.get('did')); return sess.get('pin') && d ? d.name : 'پزشک'; }, admin: () => (sess.get('apin') ? 'مدیر سیستم' : 'مدیر') }[tab];
+  $('#whoami').textContent = who ? who() : 'مهمان';
+}
+$('#burger').onclick = () => $('#side').classList.toggle('open');
+document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => { $('#side').classList.remove('open'); showBanner(b.dataset.tab); }));
 
 /* ================= تب‌ها ================= */
 let currentTab = 'patient';
@@ -571,11 +674,61 @@ const TOOL_FA = {
   search_physio_plan: '۴. ساخت برنامه‌ی تمرینی', prepare_visit_summary: '۴. آماده‌سازی خلاصه‌ی پرونده',
   refer_to_doctor: 'ارجاع به پزشک', llm_error: 'خطای مدل (برگشت به حالت دمو)'
 };
+function whyLines(c) {
+  const L = [];   // [آیکن, متن]
+  (c.trace || []).forEach(t => {
+    const o = t.output || {};
+    switch (t.tool) {
+      case 'check_red_flags':
+        if (o.flagged) L.push(['🚨', 'علائم هشدار پیدا شد: ' + (o.flags || []).map(f => f.label).join('، ') + '. طبق قاعده‌ی ایمنی، ایجنت فوراً متوقف شد و پرونده «اورژانسی» شد؛ هیچ دارو یا توصیه‌ی درمانی ساخته نشد.']);
+        else L.push(['✅', 'علائم خطر فوری (مثل درد قفسه‌ی سینه یا تنگی نفس) پیدا نشد.']);
+        break;
+      case 'suggest_doctor':
+        if (o.suggestion) L.push(['↪️', `پزشک مناسب‌تر پیشنهاد شد: ${o.suggestion.suggested_doctor.name} (${o.suggestion.suggested_doctor.specialty}). ${o.suggestion.reason}`]);
+        break;
+      case 'check_risk_factors':
+        if (o.has_risk) L.push(['⚠️', 'عامل خطر پیدا شد: ' + (o.reasons || []).join(' ') + ' بنابراین ایجنت درمان پیشنهاد نکرد و پرونده را برای ارزیابی پزشک فرستاد.']);
+        else L.push(['✅', 'عامل خطر خاصی (مثل سن بسیار بالا یا بارداری نامناسب برای دارو) پیدا نشد.']);
+        break;
+      case 'search_guidelines':
+        if (o.matched) L.push(['📚', `علائم با «${o.condition}» سازگار بود (کلیدواژه‌ها: ${(o.matched_keywords || []).join('، ')}). فقط از راهنمای درمانی داخل سامانه استفاده شد، نه حدس آزاد.`]);
+        else L.push(['❔', 'راهنمای مرتبطی پیدا نشد؛ ایجنت حدس نزد و پرونده را به پزشک سپرد.']);
+        break;
+      case 'check_drug_safety':
+        (o.results || []).forEach(r => {
+          if (r.status === 'blocked') L.push(['⛔', `${r.name_fa} حذف شد: ${(r.reasons || []).join(' ')}`]);
+          else L.push(['💊', `${r.name_fa} از نظر آلرژی، بیماری زمینه‌ای و داروهای فعلی ایمن بود.` + ((r.cautions || []).length ? ' احتیاط: ' + r.cautions.join(' ') : '')]);
+        });
+        break;
+      case 'create_draft_prescription':
+        if (o.status === 'draft_created') L.push(['📝', 'فقط یک «پیش‌نویس» ساخته شد. ایجنت اجازه ندارد نسخه یا کد صادر کند؛ تصمیم نهایی با پزشک است.']);
+        break;
+      case 'search_physio_plan':
+        if (o.matched) L.push(['🏃', 'برای ناحیه‌ی درد، برنامه‌ی تمرینی آماده از پایگاه انتخاب شد و منتظر بررسی فیزیوتراپیست است.']);
+        else L.push(['❔', o.message || 'برنامه‌ی آماده‌ای پیدا نشد؛ ارزیابی حضوری لازم است.']);
+        break;
+      case 'prepare_visit_summary':
+        L.push(['🗂️', 'خلاصه‌ی پرونده برای پزشک آماده شد' + (o.priority && o.priority !== 'routine' ? ' با اولویت بالا: ' + (o.priority_reasons || []).join('، ') : ' (اولویت معمولی)') + '. ایجنت تشخیص یا تصمیم درمانی نمی‌دهد.']);
+        break;
+      case 'refer_to_doctor':
+        if (o.urgency !== 'emergency') L.push(['👨‍⚕️', 'پرونده برای تصمیم پزشک ارجاع شد.']);
+        break;
+    }
+  });
+  return L;
+}
+function whyHtml(c) {
+  const L = whyLines(c);
+  if (!L.length) return '';
+  return `<details class="why"><summary>💡 چرا ایجنت این نتیجه را داد؟</summary>
+    <ul>${L.map(x => `<li><span>${x[0]}</span><span>${esc(x[1])}</span></li>`).join('')}</ul>
+    <div class="muted small">این توضیح از همان مراحل واقعی ایجنت ساخته شده است، نه متن ثابت.</div></details>`;
+}
 function traceHtml(c) {
   if (!c.trace || !c.trace.length) return '';
   const steps = c.trace.map(t => `<div class="step"><b>${esc(TOOL_FA[t.tool] || t.tool)}</b> <span class="muted">${esc(t.ts)}</span>
     <pre>${esc(JSON.stringify({ input: t.input, output: t.output }, null, 1))}</pre></div>`).join('');
-  return `<details><summary>مراحل تصمیم‌گیری ایجنت (حالت: ${esc(c.mode || '')})</summary>${steps}</details>`;
+  return whyHtml(c) + `<details><summary>مراحل فنی ایجنت (حالت: ${esc(c.mode || '')})</summary>${steps}</details>`;
 }
 function drugsHtml(drugs, selectable = false, caseId = '') {
   return drugs.map(d => `<div class="drug"><div class="row">${selectable ? `<input type="checkbox" style="width:auto" checked data-drug="${esc(d.id)}" data-case="${esc(caseId)}" data-keepc id="dr-${esc(caseId)}-${esc(d.id)}">` : ''}
@@ -725,7 +878,8 @@ function renderDoctor(doc, cases) {
   const act = document.activeElement && document.activeElement.id;
   const head = `<div class="hero st-${doc.style}" ${themeAttr(doc)}><div class="hero-pat" data-style="${doc.style}"></div><div class="hero-in"><div class="av">${photoOrAvatar(doc, 60)}</div><div><h2 style="font-size:18px">${esc(doc.name)} — ${esc(doc.specialty)}</h2><div class="small">پرونده‌های شما (${fa(cases.length)})</div></div></div></div>`;
   const list = cases.length ? cases.map(c => caseCard(doc, c)).join('') : '<div class="card muted">هنوز بیماری برای شما ثبت نشده است.</div>';
-  $('#doctor-list').innerHTML = `<div class="themed st-${doc.style}" ${themeAttr(doc)}>${head}${list}</div>`;
+  updateBell(cases); showBanner('doctor');
+  $('#doctor-list').innerHTML = `<div class="themed st-${doc.style}" ${themeAttr(doc)}>${head}${statsHtml(cases)}${tableHtml(cases, false)}${list}</div>`;
   decorate();
   Object.entries(keep).forEach(([id, v]) => { const e = document.getElementById(id); if (e) e.value = v; });
   Object.entries(checks).forEach(([id, v]) => { const e = document.getElementById(id); if (e) e.checked = v; });
@@ -853,7 +1007,7 @@ async function loadAdmin(force) {
 }
 function renderAdmin(r) {
   $('#adm-sum').textContent = `تعداد کل پرونده‌ها: ${fa(r.total)} (به‌روزرسانی خودکار)`;
-  $('#admin-list').innerHTML = assistLogHtml(r.assistant || []) + (r.cases.length ? r.cases.map(adminCard).join('') : '<div class="card muted">هنوز کسی فرمی ارسال نکرده است.</div>');
+  updateBell(r.cases); showBanner('admin'); $('#admin-list').innerHTML = statsHtml(r.cases) + tableHtml(r.cases, true) + assistLogHtml(r.assistant || []) + (r.cases.length ? r.cases.map(adminCard).join('') : '<div class="card muted">هنوز کسی فرمی ارسال نکرده است.</div>');
   loadAdminThumbs();
 }
 function assistLogHtml(log) {
@@ -937,6 +1091,7 @@ function applyCfg(cfg) {
   DOCTORS = cfg.doctors; PAYREQ = cfg.payment !== false;
   if (!cfg.demo_pins) $('#pin-hint').classList.add('hide');  // روی سرور عمومی رمزها نمایش داده نمی‌شوند
   $('#as-off').classList.toggle('hide', !!cfg.assistant);
+  showBanner(currentTab);
 }
 async function refreshDoctors() {  // وقت‌های خالی هر دقیقه به‌روز می‌شود (فقط روی صفحه‌ی اصلی)
   if (currentTab !== 'patient' || !root().querySelector('.docgrid')) return;
