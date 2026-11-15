@@ -5,6 +5,7 @@
 """
 import base64
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -24,10 +25,6 @@ import tools
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(BASE, "data"))  # برای دیسک پایدار می‌توان تغییر داد
 STORE_PATH = os.path.join(DATA_DIR, "store.json")
-PATIENTS_PATH = os.path.join(DATA_DIR, "patients.json")
-PATIENTS = {}
-MODULES = {"appointments": [], "visits": [], "payments": [], "inventory": [], "staff": []}
-MODULES_PATH = os.path.join(DATA_DIR, "modules.json")
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 MAX_CASES = int(os.environ.get("MAX_CASES", "500"))          # سقف کل پرونده‌ها (جلوگیری از پر شدن دیسک)
 RATE_INTAKE = int(os.environ.get("RATE_INTAKE", "60"))        # ثبت بیمار در ساعت برای هر IP
@@ -147,40 +144,6 @@ def _save():
     except Exception:
         pass
 
-
-def _load_patients():
-    try:
-        with open(PATIENTS_PATH, encoding="utf-8") as f:
-            data = json.load(f)
-            if isinstance(data, dict): PATIENTS.update(data)
-    except (OSError, ValueError):
-        pass
-
-
-def _save_patients():
-    os.makedirs(DATA_DIR, exist_ok=True)
-    tmp = PATIENTS_PATH + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(PATIENTS, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, PATIENTS_PATH)
-
-
-def _load_modules():
-    try:
-        with open(MODULES_PATH, encoding="utf-8") as f:
-            data = json.load(f)
-            if isinstance(data, dict):
-                for key in MODULES:
-                    if isinstance(data.get(key), list): MODULES[key] = data[key]
-    except (OSError, ValueError):
-        pass
-
-def _save_modules():
-    os.makedirs(DATA_DIR, exist_ok=True)
-    tmp = MODULES_PATH + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(MODULES, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, MODULES_PATH)
 
 def _load_assist():
     try:
@@ -315,6 +278,9 @@ def public_case(c, include_trace=True):
     return out
 
 
+REQUIRE_NATIONAL_ID = os.environ.get("NATIONAL_ID_REQUIRED", "1") != "0"  # کد ملی در فرم‌ها اجباری باشد
+HIST_SEED = {}  # هش کد ملی -> سوابق فرضی دمو (data/history_seed.json)
+_ID_KEY = b"demo-key"
 SIM_BUSY = os.environ.get("SIM_BUSY", "1") != "0"  # نوبت‌های پرشده‌ی فرضی تا وقت خالی واقع‌گرایانه باشد
 
 
@@ -335,6 +301,91 @@ def _busy_fn(d):
         prob = min(0.97, rate * (0.6 + 0.9 * (1 - pos) ** 2))
         return int(hashlib.sha256(f"{d['id']}|{s.isoformat()}".encode()).hexdigest()[:8], 16) / 0xFFFFFFFF < prob
     return busy
+
+
+# ---------------------------------------------------------------- کد ملی و سوابق بیمار
+def _norm_digits(x):
+    return str(x or "").translate(_FA2EN).strip().replace(" ", "")
+
+
+def _valid_melli(c):
+    """اعتبارسنجی کد ملی ایران (۱۰ رقم + رقم کنترل)."""
+    if not (len(c) == 10 and c.isdigit()) or len(set(c)) == 1:
+        return False
+    s = sum(int(ch) * (10 - i) for i, ch in enumerate(c[:9])) % 11
+    return int(c[9]) == (s if s < 2 else 11 - s)
+
+
+def _idhash(c):
+    return hmac.new(_ID_KEY, c.encode(), hashlib.sha256).hexdigest()[:32]
+
+
+def _mask_id(c):
+    return c[:3] + "****" + c[-3:]
+
+
+def _init_idkey():
+    """کلید پنهان برای هش کد ملی؛ کد ملیِ خام هیچ‌جا ذخیره نمی‌شود."""
+    global _ID_KEY
+    path = os.path.join(DATA_DIR, "idkey")
+    try:
+        with open(path, encoding="utf-8") as f:
+            k = f.read().strip()
+    except Exception:
+        k = ""
+    if not k:
+        k = secrets.token_hex(32)
+        try:
+            os.makedirs(DATA_DIR, exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(k)
+        except Exception:
+            pass
+    _ID_KEY = k.encode()
+    HIST_SEED.clear()
+    try:
+        with open(os.path.join(BASE, "data", "history_seed.json"), encoding="utf-8") as f:
+            for p in json.load(f).get("patients", []):
+                HIST_SEED[_idhash(p["national_id"])] = p["records"]
+    except Exception:
+        pass
+
+
+STATUS_FA = {"emergency": "اورژانسی", "referred": "ارجاع حضوری", "pending_doctor": "در انتظار پزشک", "approved": "تأیید شد",
+             "accepted": "پذیرفته شد", "rejected": "رد شد", "dispensed": "نسخه تحویل شد"}
+
+
+def _ago(ts):
+    days = int((time.time() - ts) // 86400)
+    if days < 1:
+        return "امروز"
+    if days < 30:
+        return f"{calendar_fa.fa_digits(days)} روز پیش"
+    if days < 365:
+        return f"{calendar_fa.fa_digits(days // 30)} ماه پیش"
+    return f"{calendar_fa.fa_digits(days // 365)} سال پیش"
+
+
+def _history(c):
+    """سوابق قبلی همین کد ملی (سوابق فرضی دمو + پرونده‌های ثبت‌شده)؛ فقط برای پزشک و مدیر. داخل LOCK."""
+    nat = c.get("national")
+    if not nat:
+        return None
+    h, items = nat["hash"], []
+    for r in HIST_SEED.get(h, []):
+        ts = time.time() - r["days_ago"] * 86400
+        items.append({"ts": ts, "date": calendar_fa.date_fa(datetime.fromtimestamp(ts, calendar_fa.IRAN)), "ago": _ago(ts),
+                      "doctor": r["doctor"], "specialty": r["specialty"], "summary": r["summary"], "status": r["status"]})
+    for o in CASES.values():
+        if o["id"] != c["id"] and (o.get("national") or {}).get("hash") == h:
+            d = DOCTORS.get(o["doctor_id"], {})
+            items.append({"ts": o["created_ts"], "date": o["created"].split("،")[0], "ago": _ago(o["created_ts"]),
+                          "doctor": d.get("name", ""), "specialty": d.get("specialty", ""),
+                          "summary": o["symptoms"][:90], "status": STATUS_FA.get(o["status"], o["status"])})
+    items.sort(key=lambda i: i["ts"])
+    for i in items:
+        del i["ts"]
+    return {"count": len(items), "first": items[0] if items else None, "items": items[-5:][::-1]}
 
 
 def _taken(doctor_id, exclude=None):
@@ -546,47 +597,10 @@ class Handler(BaseHTTPRequestHandler):
                     pd["next_slot"] = calendar_fa.describe(s, d["schedule"])["text"] if s else None
                     docs.append(pd)
             return self._json(200, {"doctors": docs, "demo_pins": DEMO_PINS,
-                                    "assistant": agent.llm_available(), "now": calendar_fa.stamp()})
+                                    "assistant": agent.llm_available(), "now": calendar_fa.stamp(),
+                                    "payment": REQUIRE_PAYMENT})
 
         # ---------- پنل مدیر: همه‌ی پرونده‌ها
-        if path == "/api/admin/patients":
-            if not self._admin():
-                return self._json(401, {"error": "رمز مدیر نادرست است یا تنظیم نشده"})
-            name = str(data.get("name", "")).strip()[:100]
-            phone = str(data.get("phone", "")).strip()[:30]
-            if not name or not phone:
-                return self._json(400, {"error": "نام و شماره تماس الزامی است"})
-            pid = str(data.get("id", "")).strip()
-            fields = {
-                "name": name, "phone": phone,
-                "national": str(data.get("national", "")).strip()[:20],
-                "birth_date": str(data.get("birth_date", "")).strip()[:20],
-                "gender": str(data.get("gender", "")).strip()[:20],
-                "specialty": str(data.get("specialty", "")).strip()[:50],
-                "notes": str(data.get("notes", "")).strip()[:2000],
-            }
-            with LOCK:
-                if pid and pid not in PATIENTS:
-                    return self._json(404, {"error": "بیمار پیدا نشد"})
-                if not pid:
-                    pid = secrets.token_hex(6)
-                    fields["created_at"] = calendar_fa.stamp()
-                else:
-                    fields["created_at"] = PATIENTS[pid].get("created_at", calendar_fa.stamp())
-                fields.update({"id": pid, "updated_at": calendar_fa.stamp()})
-                PATIENTS[pid] = fields
-                try:
-                    _save_patients()
-                except OSError:
-                    return self._json(500, {"error": "ذخیره‌سازی انجام نشد؛ فضای ذخیره‌سازی سرور را بررسی کنید"})
-            return self._json(200, {"patient": fields})
-
-        m = re.fullmatch(r"/api/admin/module/(appointments|visits|payments|inventory|staff)", path)
-        if m:
-            if not self._admin(): return self._json(401, {"error": "رمز مدیر نادرست است یا تنظیم نشده"})
-            kind = m.group(1)
-            with LOCK: return self._json(200, {"items": list(MODULES[kind])})
-
         if path == "/api/admin/links":
             if not self._admin():
                 return self._json(401, {"error": "رمز مدیر نادرست است یا تنظیم نشده"})
@@ -598,19 +612,6 @@ class Handler(BaseHTTPRequestHandler):
                                 "path": f"/?g={tok}" if st in ("unused", "active") else ""})
             return self._json(200, {"gate": GATE, "links": out[:30]})
 
-        if path == "/api/admin/patients":
-            if not self._admin():
-                return self._json(401, {"error": "رمز مدیر نادرست است یا تنظیم نشده"})
-            with LOCK:
-                items = sorted(PATIENTS.values(), key=lambda x: x.get("updated_at", ""), reverse=True)
-                return self._json(200, {"patients": items, "total": len(items)})
-
-        m = re.fullmatch(r"/api/admin/module/(appointments|visits|payments|inventory|staff)", path)
-        if m:
-            if not self._admin(): return self._json(401, {"error": "رمز مدیر نادرست است یا تنظیم نشده"})
-            kind = m.group(1)
-            with LOCK: return self._json(200, {"items": list(MODULES[kind])})
-
         if path == "/api/admin/cases":
             if not self._admin():
                 return self._json(401, {"error": "رمز مدیر نادرست است یا تنظیم نشده"})
@@ -619,7 +620,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, {"total": len(items), "assistant": list(reversed(ASSIST_LOG))[:100], "cases": [
                     dict(public_case(c, include_trace=False), patient=c["patient"], symptoms=c["symptoms"],
                          answers_display=c.get("answers_display", []), code=c.get("code"),
-                         risk_reasons=c.get("risk_reasons", []))
+                         risk_reasons=c.get("risk_reasons", []),
+                         national=(c.get("national") or {}).get("masked"), history=_history(c))
                     for c in items]})
 
         m = re.fullmatch(r"/api/admin/cases/([0-9a-f]{8})/images/(\d)", path)
@@ -678,7 +680,8 @@ class Handler(BaseHTTPRequestHandler):
                     dict(public_case(c), patient=c["patient"], symptoms=c["symptoms"],
                          answers_display=c.get("answers_display", []),
                          risk_reasons=c.get("risk_reasons", []), safety=c.get("safety", []),
-                         rejected_drugs=c.get("rejected_drugs", []), chat_alert=c.get("chat_alert", False))
+                         rejected_drugs=c.get("rejected_drugs", []), chat_alert=c.get("chat_alert", False),
+                         national=(c.get("national") or {}).get("masked"), history=_history(c))
                     for c in items]})
 
         m = re.fullmatch(r"/api/pharmacy/([A-Za-z0-9\- ]{4,20})", path)
@@ -712,27 +715,6 @@ class Handler(BaseHTTPRequestHandler):
         data = self._body()
         if data is None:
             return self._json(413, {"error": "حجم درخواست زیاد است؛ تصویرها را کوچک‌تر کنید"})
-
-        m = re.fullmatch(r"/api/admin/module/(appointments|visits|payments|inventory|staff)", path)
-        if m:
-            if not self._admin(): return self._json(401, {"error": "رمز مدیر نادرست است یا تنظیم نشده"})
-            kind = m.group(1)
-            allowed = {
-                "appointments": ["patient", "phone", "doctor", "date", "time", "status", "notes"],
-                "visits": ["patient", "doctor", "date", "diagnosis", "treatment", "notes"],
-                "payments": ["patient", "amount", "method", "date", "description"],
-                "inventory": ["name", "category", "quantity", "unit", "min_quantity", "notes"],
-                "staff": ["name", "role", "phone", "specialty", "notes"]
-            }[kind]
-            item = {k: str(data.get(k, "")).strip()[:2000] for k in allowed}
-            required = {"appointments": ["patient", "date", "time"], "visits": ["patient", "date", "diagnosis"], "payments": ["amount", "date"], "inventory": ["name", "quantity"], "staff": ["name", "role"]}[kind]
-            if any(not item.get(k) for k in required): return self._json(400, {"error": "لطفاً فیلدهای ضروری را تکمیل کنید"})
-            item.update({"id": secrets.token_hex(6), "created_at": calendar_fa.stamp()})
-            with LOCK:
-                MODULES[kind].append(item)
-                try: _save_modules()
-                except OSError: MODULES[kind].remove(item); return self._json(500, {"error": "ذخیره‌سازی انجام نشد"})
-            return self._json(201, {"item": item})
 
         # ---------- ساخت لینک مهمانِ موقت (فقط مدیر؛ فقط وقتی OWNER_KEY تنظیم باشد)
         if path == "/api/admin/links":
@@ -844,14 +826,21 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(402, {"error": "ابتدا هزینه‌ی ویزیت را بپردازید و کد رهگیری را تأیید کنید", "code": "payment"})
             answers_in = data.get("answers") if isinstance(data.get("answers"), dict) else {}
             fields = doc["form"]["fields"]
-            vals, display, extra = {}, [], []
+            vals, display, extra, national = {}, [], [], None
             for f in fields:
                 if not _visible(f, vals):
                     continue
                 v = answers_in.get(f["id"], "")
                 v = "" if v is None else str(v).strip()[:1500]
-                if f.get("required") and not v:
+                if f.get("required") and not v and not (f.get("national") and not REQUIRE_NATIONAL_ID):
                     return self._json(400, {"error": f"«{f['label']}» را پر کنید"})
+                if f.get("national"):  # کد ملی: فقط هش و نسخه‌ی ماسک‌شده ذخیره می‌شود
+                    v = _norm_digits(v)
+                    if v and not _valid_melli(v):
+                        return self._json(400, {"error": "کد ملی نامعتبر است؛ ۱۰ رقم را درست وارد کنید"})
+                    if v:
+                        national = {"hash": _idhash(v), "masked": _mask_id(v)}
+                    continue
                 vals[f["id"]] = v
                 if v and f.get("flag_text") and v in _eqs(f.get("flag_if")):
                     extra.append(f["flag_text"])
@@ -895,6 +884,8 @@ class Handler(BaseHTTPRequestHandler):
                 "draft": ctx.get("draft"), "routing": ctx.get("routing"), "trace": ctx["trace"],
                 "images": saved, "chat": [],
             }
+            if national:
+                case["national"] = national
             with LOCK:
                 if REQUIRE_PAYMENT:
                     p = _pay_ok(pay_ref, doc["id"])
@@ -1053,9 +1044,8 @@ def make_server(host="127.0.0.1", port=8000):
 
 
 if __name__ == "__main__":
+    _init_idkey()
     _load()
-    _load_patients()
-    _load_modules()
     _load_assist()
     # روی Render متغیر PORT تنظیم است و باید روی همه‌ی آدرس‌ها گوش داد؛ لوکال فقط روی 127.0.0.1
     host = os.environ.get("HOST") or ("0.0.0.0" if os.environ.get("PORT") else "127.0.0.1")
