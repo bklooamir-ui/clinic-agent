@@ -24,6 +24,10 @@ import tools
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join(BASE, "data"))  # برای دیسک پایدار می‌توان تغییر داد
 STORE_PATH = os.path.join(DATA_DIR, "store.json")
+PATIENTS_PATH = os.path.join(DATA_DIR, "patients.json")
+PATIENTS = {}
+MODULES = {"appointments": [], "visits": [], "payments": [], "inventory": [], "staff": []}
+MODULES_PATH = os.path.join(DATA_DIR, "modules.json")
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 MAX_CASES = int(os.environ.get("MAX_CASES", "500"))          # سقف کل پرونده‌ها (جلوگیری از پر شدن دیسک)
 RATE_INTAKE = int(os.environ.get("RATE_INTAKE", "60"))        # ثبت بیمار در ساعت برای هر IP
@@ -143,6 +147,40 @@ def _save():
     except Exception:
         pass
 
+
+def _load_patients():
+    try:
+        with open(PATIENTS_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, dict): PATIENTS.update(data)
+    except (OSError, ValueError):
+        pass
+
+
+def _save_patients():
+    os.makedirs(DATA_DIR, exist_ok=True)
+    tmp = PATIENTS_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(PATIENTS, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, PATIENTS_PATH)
+
+
+def _load_modules():
+    try:
+        with open(MODULES_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, dict):
+                for key in MODULES:
+                    if isinstance(data.get(key), list): MODULES[key] = data[key]
+    except (OSError, ValueError):
+        pass
+
+def _save_modules():
+    os.makedirs(DATA_DIR, exist_ok=True)
+    tmp = MODULES_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(MODULES, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, MODULES_PATH)
 
 def _load_assist():
     try:
@@ -511,6 +549,44 @@ class Handler(BaseHTTPRequestHandler):
                                     "assistant": agent.llm_available(), "now": calendar_fa.stamp()})
 
         # ---------- پنل مدیر: همه‌ی پرونده‌ها
+        if path == "/api/admin/patients":
+            if not self._admin():
+                return self._json(401, {"error": "رمز مدیر نادرست است یا تنظیم نشده"})
+            name = str(data.get("name", "")).strip()[:100]
+            phone = str(data.get("phone", "")).strip()[:30]
+            if not name or not phone:
+                return self._json(400, {"error": "نام و شماره تماس الزامی است"})
+            pid = str(data.get("id", "")).strip()
+            fields = {
+                "name": name, "phone": phone,
+                "national": str(data.get("national", "")).strip()[:20],
+                "birth_date": str(data.get("birth_date", "")).strip()[:20],
+                "gender": str(data.get("gender", "")).strip()[:20],
+                "specialty": str(data.get("specialty", "")).strip()[:50],
+                "notes": str(data.get("notes", "")).strip()[:2000],
+            }
+            with LOCK:
+                if pid and pid not in PATIENTS:
+                    return self._json(404, {"error": "بیمار پیدا نشد"})
+                if not pid:
+                    pid = secrets.token_hex(6)
+                    fields["created_at"] = calendar_fa.stamp()
+                else:
+                    fields["created_at"] = PATIENTS[pid].get("created_at", calendar_fa.stamp())
+                fields.update({"id": pid, "updated_at": calendar_fa.stamp()})
+                PATIENTS[pid] = fields
+                try:
+                    _save_patients()
+                except OSError:
+                    return self._json(500, {"error": "ذخیره‌سازی انجام نشد؛ فضای ذخیره‌سازی سرور را بررسی کنید"})
+            return self._json(200, {"patient": fields})
+
+        m = re.fullmatch(r"/api/admin/module/(appointments|visits|payments|inventory|staff)", path)
+        if m:
+            if not self._admin(): return self._json(401, {"error": "رمز مدیر نادرست است یا تنظیم نشده"})
+            kind = m.group(1)
+            with LOCK: return self._json(200, {"items": list(MODULES[kind])})
+
         if path == "/api/admin/links":
             if not self._admin():
                 return self._json(401, {"error": "رمز مدیر نادرست است یا تنظیم نشده"})
@@ -521,6 +597,19 @@ class Handler(BaseHTTPRequestHandler):
                     out.append({"state": st, "left": left, "minutes": g["minutes"],
                                 "path": f"/?g={tok}" if st in ("unused", "active") else ""})
             return self._json(200, {"gate": GATE, "links": out[:30]})
+
+        if path == "/api/admin/patients":
+            if not self._admin():
+                return self._json(401, {"error": "رمز مدیر نادرست است یا تنظیم نشده"})
+            with LOCK:
+                items = sorted(PATIENTS.values(), key=lambda x: x.get("updated_at", ""), reverse=True)
+                return self._json(200, {"patients": items, "total": len(items)})
+
+        m = re.fullmatch(r"/api/admin/module/(appointments|visits|payments|inventory|staff)", path)
+        if m:
+            if not self._admin(): return self._json(401, {"error": "رمز مدیر نادرست است یا تنظیم نشده"})
+            kind = m.group(1)
+            with LOCK: return self._json(200, {"items": list(MODULES[kind])})
 
         if path == "/api/admin/cases":
             if not self._admin():
@@ -623,6 +712,27 @@ class Handler(BaseHTTPRequestHandler):
         data = self._body()
         if data is None:
             return self._json(413, {"error": "حجم درخواست زیاد است؛ تصویرها را کوچک‌تر کنید"})
+
+        m = re.fullmatch(r"/api/admin/module/(appointments|visits|payments|inventory|staff)", path)
+        if m:
+            if not self._admin(): return self._json(401, {"error": "رمز مدیر نادرست است یا تنظیم نشده"})
+            kind = m.group(1)
+            allowed = {
+                "appointments": ["patient", "phone", "doctor", "date", "time", "status", "notes"],
+                "visits": ["patient", "doctor", "date", "diagnosis", "treatment", "notes"],
+                "payments": ["patient", "amount", "method", "date", "description"],
+                "inventory": ["name", "category", "quantity", "unit", "min_quantity", "notes"],
+                "staff": ["name", "role", "phone", "specialty", "notes"]
+            }[kind]
+            item = {k: str(data.get(k, "")).strip()[:2000] for k in allowed}
+            required = {"appointments": ["patient", "date", "time"], "visits": ["patient", "date", "diagnosis"], "payments": ["amount", "date"], "inventory": ["name", "quantity"], "staff": ["name", "role"]}[kind]
+            if any(not item.get(k) for k in required): return self._json(400, {"error": "لطفاً فیلدهای ضروری را تکمیل کنید"})
+            item.update({"id": secrets.token_hex(6), "created_at": calendar_fa.stamp()})
+            with LOCK:
+                MODULES[kind].append(item)
+                try: _save_modules()
+                except OSError: MODULES[kind].remove(item); return self._json(500, {"error": "ذخیره‌سازی انجام نشد"})
+            return self._json(201, {"item": item})
 
         # ---------- ساخت لینک مهمانِ موقت (فقط مدیر؛ فقط وقتی OWNER_KEY تنظیم باشد)
         if path == "/api/admin/links":
@@ -944,6 +1054,8 @@ def make_server(host="127.0.0.1", port=8000):
 
 if __name__ == "__main__":
     _load()
+    _load_patients()
+    _load_modules()
     _load_assist()
     # روی Render متغیر PORT تنظیم است و باید روی همه‌ی آدرس‌ها گوش داد؛ لوکال فقط روی 127.0.0.1
     host = os.environ.get("HOST") or ("0.0.0.0" if os.environ.get("PORT") else "127.0.0.1")
