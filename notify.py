@@ -9,6 +9,7 @@
 import json
 import os
 import threading
+import urllib.error
 import urllib.request
 
 STATUS_FA = {"emergency": "اورژانسی ⚠", "referred": "نیاز به ویزیت حضوری", "pending_doctor": "در انتظار تأیید پزشک"}
@@ -25,6 +26,8 @@ def format_case(case, doctor_name):
              f"وضعیت: {STATUS_FA.get(case['status'], case['status'])}"]
     if case.get("appointment"):
         lines.append(f"وقت ویزیت: {case['appointment']['text']}")
+    if case.get("national"):
+        lines.append(f"کد ملی: {case['national']['masked']}")
     if case.get("payment"):
         lines.append(f"پرداخت آزمایشی: {case['payment']['amount']:,} تومان، کد {case['payment']['ref']}")
     lines.append(f"شرح حال: {case['symptoms']}")
@@ -42,8 +45,15 @@ def _send(text):
     req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
     try:
         urllib.request.urlopen(req, timeout=10).read()
-    except Exception:
-        pass  # اعلان نباید ثبت پرونده را خراب کند
+        print("notify: پیام ارسال شد", flush=True)
+    except urllib.error.HTTPError as e:  # دلیل را در Logs می‌نویسیم (توکن را چاپ نمی‌کنیم)
+        try:
+            detail = e.read().decode("utf-8", "ignore")[:200]
+        except Exception:
+            detail = ""
+        print(f"notify: ارسال ناموفق، کد {e.code}: {detail}", flush=True)
+    except Exception as e:
+        print(f"notify: ارسال ناموفق ({type(e).__name__})", flush=True)  # اعلان نباید ثبت پرونده را خراب کند
 
 
 def notify_case(case, doctor_name):
