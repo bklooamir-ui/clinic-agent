@@ -193,7 +193,7 @@
   .whoami .ava svg { width:20px; height:20px; fill:currentColor; }
   main { max-width:1100px; margin:0 auto; padding:20px 22px 70px; }
   .dbanner { position:relative; overflow:hidden; border-radius:20px; color:#fff; padding:34px 38px; margin-bottom:18px; min-height:190px;
-    background-image:linear-gradient(90deg,rgba(7,31,69,.10) 0%,rgba(7,35,78,.42) 34%,rgba(10,52,112,.94) 61%,rgba(14,154,167,.96) 100%),url('images/clinic-hero.webp');
+    background-image:linear-gradient(90deg,rgba(7,31,69,.10) 0%,rgba(7,35,78,.42) 34%,rgba(10,52,112,.94) 61%,rgba(14,154,167,.96) 100%),url('/img/clinic-hero.webp');
     background-position:left center; background-size:cover; box-shadow:0 10px 28px rgba(13,59,122,.18); display:flex; align-items:center; justify-content:space-between; gap:20px; }
   .dbanner h2 { margin:0 0 6px; font-size:32px; line-height:1.4; }
   .dbanner p { margin:0; font-size:17px; color:#d7e8f5; }
@@ -265,11 +265,11 @@
     <div><b>Clinic Agent 2.0</b><small>سامانه مدیریت هوشمند کلینیک</small></div>
   </div>
   <div class="tabs">
-    <button class="tab" data-tab="patient"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg><span>بیمار</span></button>
+    <button class="tab on" data-tab="patient"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg><span>بیمار</span></button>
     <button class="tab" data-tab="assistant"><svg viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 14h.01M15 14h.01M9 17.5h6"/></svg><span>دستیار هوشمند</span></button>
     <button class="tab" data-tab="doctor"><svg viewBox="0 0 24 24"><path d="M6 3v6a4 4 0 0 0 8 0V3"/><path d="M10 13v3a4 4 0 0 0 8 0v-1"/><circle cx="18" cy="13" r="2"/></svg><span>پزشک</span></button>
     <button class="tab" data-tab="pharmacy"><svg viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="6" rx="3" transform="rotate(-35 12 12)"/><path d="M9.5 8.5l6 6"/></svg><span>داروخانه</span></button>
-    <button class="tab on" data-tab="admin"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg><span>داشبورد مدیریت</span></button>
+    <button class="tab" data-tab="admin"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg><span>داشبورد مدیریت</span></button>
 
     
 
@@ -289,7 +289,7 @@
 <main>
   <div id="banner"></div>
 
-  <section id="tab-patient" class="hide"><div id="patient-root"><div class="card muted">در حال بارگذاری…</div></div></section>
+  <section id="tab-patient"><div id="patient-root"><div class="card muted">در حال بارگذاری…</div></div></section>
 
   <section id="tab-assistant" class="hide">
     <div class="card">
@@ -330,7 +330,7 @@
     <div id="ph-result"></div>
   </section>
 
-  <section id="tab-admin">
+  <section id="tab-admin" class="hide">
     <div class="card">
       <div class="row">
         <label style="margin:0">ورود امن مدیر</label>
@@ -494,7 +494,7 @@ $('#burger').onclick = () => $('#side').classList.toggle('open');
 document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => { $('#side').classList.remove('open'); showBanner(b.dataset.tab); }));
 
 /* ================= تب‌ها ================= */
-let currentTab = 'admin';
+let currentTab = 'patient';
 document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
   currentTab = b.dataset.tab;
   document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === b));
