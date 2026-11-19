@@ -290,6 +290,10 @@ def test_end_to_end():
     st, ph, _ = call("GET", "/api/pharmacy/" + code.lower().replace("-", ""))
     check("داروخانه با کد (بدون حساسیت به حروف/خط‌تیره) نسخه و نام پزشک را می‌بیند", st == 200 and ph["doctor"]["name"] == "دکتر سهرابی" and [d["id"] for d in ph["drugs"]] == ["paracetamol"])
     check("کد اشتباه → ۴۰۴", call("GET", "/api/pharmacy/ZZZZ-ZZZZ")[0] == 404)
+    check("تحویل بدون پرداخت رد می‌شود (402)", call("POST", f"/api/pharmacy/{code}/dispense", {})[0] == 402)
+    inv = call("GET", f"/api/pharmacy/{code}")[1]
+    check("فاکتور دارو جمع کل دارد", inv["total"] > 0 and inv["paid"] is False)
+    check("پرداخت دارو", call("POST", f"/api/pharmacy/{code}/pay", {})[0] == 200)
     check("ثبت تحویل داروها", call("POST", f"/api/pharmacy/{code}/dispense", {})[0] == 200)
     check("تحویل دوباره ممکن نیست (409)", call("POST", f"/api/pharmacy/{code}/dispense", {})[0] == 409)
 
