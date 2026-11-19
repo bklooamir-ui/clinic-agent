@@ -44,6 +44,8 @@ IMG_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", "
 LOCK = threading.Lock()
 CASES = {}
 DOCTORS = {d["id"]: d for d in tools.DOCTORS}
+for _d in DOCTORS.values():  # اگر در doctors.json هزینه‌ی ویزیت نبود، مقدار پیش‌فرض (کرش نکند)
+    _d.setdefault("fee", 500000)
 
 # رمز هر پزشک را می‌توان با متغیر محیطی عوض کرد: PIN_SOHRABI, PIN_MORADI, PIN_MOUSAVI, PIN_KARAMATI
 DEMO_PINS = True
@@ -159,6 +161,14 @@ def _save_assist():
             json.dump(ASSIST_LOG, f, ensure_ascii=False, indent=1)
     except Exception:
         pass
+
+
+def _rx_items(c):
+    out = []
+    for d in c.get("approved_drugs", []):
+        f = tools.FORMULARY.get(d.get("id"), {})
+        out.append({"id": d.get("id"), "name": d.get("name_fa") or f.get("name_fa", ""), "price": int(f.get("price", 30000))})
+    return out
 
 
 def _new_code(kind):
@@ -694,7 +704,10 @@ class Handler(BaseHTTPRequestHandler):
                             return self._json(404, {"error": "این کد، «کد پذیرش ویزیت» است و نسخه‌ی دارویی نیست"})
                         p = c["patient"]
                         d = DOCTORS.get(c["doctor_id"], {})
+                        items = _rx_items(c)
                         return self._json(200, {
+                            "items": items, "total": sum(i["price"] for i in items),
+                            "paid": bool(c.get("rx_paid")), "rx_ref": c.get("rx_ref"),
                             "code": c["code"], "status": c["status"],
                             "patient": {"name": p["name"], "age": p["age"]},
                             "doctor": {"name": d.get("name", ""), "specialty": d.get("specialty", "")},
@@ -1018,6 +1031,25 @@ class Handler(BaseHTTPRequestHandler):
                 _save()
                 return self._json(200, {"chat": c["chat"]})
 
+        # ---------- داروخانه: پرداخت آزمایشی هزینه‌ی دارو
+        m = re.fullmatch(r"/api/pharmacy/([A-Za-z0-9\- ]{4,20})/pay", path)
+        if m:
+            want = _norm_code(m.group(1))
+            with LOCK:
+                for c in CASES.values():
+                    if c.get("code") and _norm_code(c["code"]) == want:
+                        if c.get("code_type") != "prescription":
+                            return self._json(404, {"error": "این کد، «کد پذیرش ویزیت» است و نسخه‌ی دارویی نیست"})
+                        if c["status"] == "dispensed":
+                            return self._json(409, {"error": "این نسخه قبلاً تحویل داده شده است"})
+                        if not c.get("rx_paid"):
+                            c["rx_paid"] = True
+                            c["rx_ref"] = "RX-%06d" % secrets.randbelow(1000000)
+                            c["rx_paid_at"] = calendar_fa.stamp()
+                            _save()
+                        return self._json(200, {"paid": True, "rx_ref": c["rx_ref"], "total": sum(i["price"] for i in _rx_items(c))})
+            return self._json(404, {"error": "نسخه‌ای با این کد پیدا نشد"})
+
         # ---------- داروخانه
         m = re.fullmatch(r"/api/pharmacy/([A-Za-z0-9\- ]{4,20})/dispense", path)
         if m:
@@ -1029,6 +1061,8 @@ class Handler(BaseHTTPRequestHandler):
                             return self._json(404, {"error": "این کد، «کد پذیرش ویزیت» است و نسخه‌ی دارویی نیست"})
                         if c["status"] == "dispensed":
                             return self._json(409, {"error": "این نسخه قبلاً تحویل داده شده است"})
+                        if not c.get("rx_paid"):
+                            return self._json(402, {"error": "ابتدا هزینه‌ی داروها باید پرداخت شود"})
                         c["status"] = "dispensed"
                         c["dispensed_at"] = calendar_fa.stamp()
                         _save()
@@ -1059,4 +1093,5 @@ if __name__ == "__main__":
         print("رمز پزشکان از متغیرهای محیطی خوانده شد.", flush=True)
         if not ADMIN_PIN:
             print("هشدار: ADMIN_PIN تنظیم نشده؛ تب «مدیر» غیرفعال است.", flush=True)
+    notify.startup_check()
     make_server(host, port).serve_forever()
