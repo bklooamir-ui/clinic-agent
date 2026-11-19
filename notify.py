@@ -60,3 +60,14 @@ def notify_case(case, doctor_name):
     """در پس‌زمینه می‌فرستد تا پاسخ بیمار کند نشود."""
     if enabled():
         threading.Thread(target=_send, args=(format_case(case, doctor_name),), daemon=True).start()
+
+
+def startup_check():
+    """هنگام بالا آمدن سرور: وضعیت اعلان را در Logs می‌نویسد و یک پیام آزمایشی می‌فرستد."""
+    tok, chat = os.environ.get("NOTIFY_BOT_TOKEN"), os.environ.get("NOTIFY_CHAT_ID")
+    if not tok or not chat:
+        miss = [k for k, v in (("NOTIFY_BOT_TOKEN", tok), ("NOTIFY_CHAT_ID", chat)) if not v]
+        print("notify: غیرفعال؛ این متغیرها در Render تنظیم نیستند: " + "، ".join(miss), flush=True)
+        return
+    print(f"notify: فعال (طول شناسه {len(chat.strip())} کاراکتر؛ آدرس {os.environ.get('NOTIFY_API_BASE', 'api.telegram.org')})", flush=True)
+    threading.Thread(target=_send, args=("✅ سرور کلینیک هوشمند بالا آمد و اعلان‌ها کار می‌کند.",), daemon=True).start()
