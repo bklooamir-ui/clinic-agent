@@ -9,13 +9,38 @@
       "duration": "حداکثر ۳ تا ۵ روز",
       "qty": "۱ بسته ۱۰ تایی",
       "min_age": 12,
-      "block_allergy": ["پاراستامول", "استامینوفن", "تایلنول", "paracetamol", "acetaminophen", "tylenol"],
-      "block_conditions": ["نارسایی کبد", "بیماری کبد", "کبد", "سیروز", "هپاتیت", "liver", "cirrhosis", "hepatitis"],
+      "block_allergy": [
+        "پاراستامول",
+        "استامینوفن",
+        "تایلنول",
+        "paracetamol",
+        "acetaminophen",
+        "tylenol"
+      ],
+      "block_conditions": [
+        "نارسایی کبد",
+        "بیماری کبد",
+        "کبد",
+        "سیروز",
+        "هپاتیت",
+        "liver",
+        "cirrhosis",
+        "hepatitis"
+      ],
       "block_meds": [],
       "caution_meds": [
-        {"keywords": ["وارفارین", "warfarin"], "text": "مصرف منظم همراه وارفارین می‌تواند اثر ضدانعقاد را تغییر دهد؛ نظر پزشک لازم است."}
+        {
+          "keywords": [
+            "وارفارین",
+            "warfarin"
+          ],
+          "text": "مصرف منظم همراه وارفارین می‌تواند اثر ضدانعقاد را تغییر دهد؛ نظر پزشک لازم است."
+        }
       ],
-      "warnings": ["همزمان با سایر داروهای حاوی استامینوفن مصرف نشود."]
+      "warnings": [
+        "همزمان با سایر داروهای حاوی استامینوفن مصرف نشود."
+      ],
+      "price": 25000
     },
     "ibuprofen": {
       "name_fa": "ایبوپروفن",
@@ -25,11 +50,56 @@
       "duration": "حداکثر ۳ روز",
       "qty": "۱ بسته ۱۰ تایی",
       "min_age": 12,
-      "block_allergy": ["ایبوپروفن", "آیبوپروفن", "ibuprofen", "بروفن", "brufen", "ناپروکسن", "naproxen", "دیکلوفناک", "diclofenac", "آسپرین", "aspirin", "nsaid", "مسکن‌های غیراستروئیدی"],
-      "block_conditions": ["زخم معده", "زخم دوازدهه", "پپتیک", "ulcer", "نارسایی کلیه", "کلیه", "kidney", "renal", "آسم", "asthma", "نارسایی قلب", "heart failure", "خونریزی گوارشی"],
-      "block_meds": ["وارفارین", "warfarin", "ریواروکسابان", "rivaroxaban", "آپیکسابان", "apixaban", "کلوپیدوگرل", "clopidogrel", "پلاویکس", "هپارین", "heparin", "آسپرین", "aspirin"],
+      "block_allergy": [
+        "ایبوپروفن",
+        "آیبوپروفن",
+        "ibuprofen",
+        "بروفن",
+        "brufen",
+        "ناپروکسن",
+        "naproxen",
+        "دیکلوفناک",
+        "diclofenac",
+        "آسپرین",
+        "aspirin",
+        "nsaid",
+        "مسکن‌های غیراستروئیدی"
+      ],
+      "block_conditions": [
+        "زخم معده",
+        "زخم دوازدهه",
+        "پپتیک",
+        "ulcer",
+        "نارسایی کلیه",
+        "کلیه",
+        "kidney",
+        "renal",
+        "آسم",
+        "asthma",
+        "نارسایی قلب",
+        "heart failure",
+        "خونریزی گوارشی"
+      ],
+      "block_meds": [
+        "وارفارین",
+        "warfarin",
+        "ریواروکسابان",
+        "rivaroxaban",
+        "آپیکسابان",
+        "apixaban",
+        "کلوپیدوگرل",
+        "clopidogrel",
+        "پلاویکس",
+        "هپارین",
+        "heparin",
+        "آسپرین",
+        "aspirin"
+      ],
       "caution_meds": [],
-      "warnings": ["با معده خالی مصرف نشود."]
+      "warnings": [
+        "با معده خالی مصرف نشود."
+      ],
+      "price": 30000
     },
     "cetirizine": {
       "name_fa": "ستیریزین",
@@ -39,13 +109,40 @@
       "duration": "تا ۱۴ روز",
       "qty": "۱ بسته ۱۰ تایی",
       "min_age": 12,
-      "block_allergy": ["ستیریزین", "cetirizine", "هیدروکسی‌زین", "هیدروکسی زین", "hydroxyzine"],
-      "block_conditions": ["نارسایی کلیه", "کلیه", "kidney", "renal"],
+      "block_allergy": [
+        "ستیریزین",
+        "cetirizine",
+        "هیدروکسی‌زین",
+        "هیدروکسی زین",
+        "hydroxyzine"
+      ],
+      "block_conditions": [
+        "نارسایی کلیه",
+        "کلیه",
+        "kidney",
+        "renal"
+      ],
       "block_meds": [],
       "caution_meds": [
-        {"keywords": ["آرام‌بخش", "آرام بخش", "sedative", "دیازپام", "diazepam", "آلپرازولام", "alprazolam", "کلونازپام", "clonazepam"], "text": "همراه آرام‌بخش‌ها خواب‌آلودگی تشدید می‌شود."}
+        {
+          "keywords": [
+            "آرام‌بخش",
+            "آرام بخش",
+            "sedative",
+            "دیازپام",
+            "diazepam",
+            "آلپرازولام",
+            "alprazolam",
+            "کلونازپام",
+            "clonazepam"
+          ],
+          "text": "همراه آرام‌بخش‌ها خواب‌آلودگی تشدید می‌شود."
+        }
       ],
-      "warnings": ["ممکن است باعث خواب‌آلودگی شود؛ هنگام رانندگی احتیاط کنید."]
+      "warnings": [
+        "ممکن است باعث خواب‌آلودگی شود؛ هنگام رانندگی احتیاط کنید."
+      ],
+      "price": 45000
     },
     "saline_nasal": {
       "name_fa": "اسپری نمکی بینی",
@@ -59,7 +156,8 @@
       "block_conditions": [],
       "block_meds": [],
       "caution_meds": [],
-      "warnings": []
+      "warnings": [],
+      "price": 60000
     },
     "antacid": {
       "name_fa": "شربت آلومینیوم–منیزیم",
@@ -69,11 +167,24 @@
       "duration": "تا ۷ روز",
       "qty": "۱ بطری",
       "min_age": 12,
-      "block_allergy": ["آلومینیوم", "منیزیم", "antacid", "آنتی‌اسید"],
-      "block_conditions": ["نارسایی کلیه", "کلیه", "kidney", "renal"],
+      "block_allergy": [
+        "آلومینیوم",
+        "منیزیم",
+        "antacid",
+        "آنتی‌اسید"
+      ],
+      "block_conditions": [
+        "نارسایی کلیه",
+        "کلیه",
+        "kidney",
+        "renal"
+      ],
       "block_meds": [],
       "caution_meds": [],
-      "warnings": ["بین این دارو و سایر داروهای خوراکی حداقل ۲ ساعت فاصله بگذارید."]
+      "warnings": [
+        "بین این دارو و سایر داروهای خوراکی حداقل ۲ ساعت فاصله بگذارید."
+      ],
+      "price": 40000
     },
     "ors": {
       "name_fa": "پودر ORS (املاح خوراکی)",
@@ -87,7 +198,10 @@
       "block_conditions": [],
       "block_meds": [],
       "caution_meds": [],
-      "warnings": ["محلول آماده‌شده را بعد از ۲۴ ساعت دور بریزید."]
+      "warnings": [
+        "محلول آماده‌شده را بعد از ۲۴ ساعت دور بریزید."
+      ],
+      "price": 20000
     }
   }
 }
